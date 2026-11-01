@@ -8,7 +8,8 @@ import "Model.js" as Model
 //
 // While updates wait: a soft tinted primary button ("Tell me what changes", or
 // "Choose an assistant" when no default agent is set) above a solid
-// "Update now". In every other state: one outlined "Check again". Nothing here
+// "Update now", both compact on one row. In every other state: one outlined
+// "Check again". Nothing here
 // starts anything on its own: the user clicks. The agent is never named.
 Column {
   id: root
@@ -28,7 +29,6 @@ Column {
   signal refreshRequested()
 
   spacing: Style.space(10)
-
   function firstAction() {
     if (!pending) refreshRequested()
     else if (busy) return
@@ -36,13 +36,12 @@ Column {
     else explainRequested()
   }
 
-  // Tab and Shift+Tab move the cursor between the buttons.
   function moveFocus(direction) {
     var n = buttonCount
     cursor = cursor < 0 ? (direction > 0 ? 0 : n - 1) : (cursor + direction + n) % n
   }
 
-  // Enter and Space act on the cursor, or on the first button when none is set.
+  // Tab moves the cursor; Enter acts on it, or on the first button.
   function activateFocused() {
     if (pending && cursor === 1) updateRequested()
     else firstAction()
@@ -54,52 +53,57 @@ Column {
     fontFamily: root.fontFamily
   }
 
-  TintButton {
+  // Compact buttons sized to their text; the row wraps when too narrow.
+  Flow {
     width: parent.width
-    visible: root.pending
-    text: Model.explainLabel(root.agent, root.busy)
-    hasCursor: root.cursor === 0
-    enabled: !root.busy
-    opacity: enabled ? 1 : 0.5
-    fontFamily: root.fontFamily
-    onClicked: root.firstAction()
-  }
+    spacing: Style.space(10)
 
-  Button {
-    width: parent.width
-    height: Math.max(Style.space(44), 44)
-    visible: root.pending
-    text: qsTr("Update now")
-    focusable: true
-    hasCursor: root.cursor === 1
-    background: Commons.Color.foreground
-    foreground: Commons.Color.background
-    fontFamily: root.fontFamily
-    fontSize: Style.font.body
-    radius: Style.space(12)
+    TintButton {
+      visible: root.pending
+      text: Model.explainLabel(root.agent, root.busy)
+      hasCursor: root.cursor === 0
+      enabled: !root.busy
+      opacity: enabled ? 1 : 0.5
+      fontFamily: root.fontFamily
+      onClicked: root.firstAction()
+    }
 
-    Accessible.role: Accessible.Button
-    Accessible.name: text
+    Button {
+      height: Math.max(Style.space(34), 34)
+      visible: root.pending
+      text: qsTr("Update now")
+      focusable: true
+      hasCursor: root.cursor === 1
+      background: Commons.Color.foreground
+      foreground: Commons.Color.background
+      fontFamily: root.fontFamily
+      fontSize: Style.font.body
+      horizontalPadding: Style.space(16)
+      radius: Style.space(8)
 
-    onClicked: root.updateRequested()
-  }
+      Accessible.role: Accessible.Button
+      Accessible.name: text
 
-  Button {
-    width: parent.width
-    height: Math.max(Style.space(44), 44)
-    visible: !root.pending
-    text: qsTr("Check again")
-    focusable: true
-    hasCursor: root.cursor === 0
-    bordered: true
-    fontFamily: root.fontFamily
-    fontSize: Style.font.body
-    radius: Style.space(12)
+      onClicked: root.updateRequested()
+    }
 
-    Accessible.role: Accessible.Button
-    Accessible.name: text
+    Button {
+      height: Math.max(Style.space(34), 34)
+      visible: !root.pending
+      text: qsTr("Check again")
+      focusable: true
+      hasCursor: root.cursor === 0
+      bordered: true
+      fontFamily: root.fontFamily
+      fontSize: Style.font.body
+      horizontalPadding: Style.space(16)
+      radius: Style.space(8)
 
-    onClicked: root.refreshRequested()
+      Accessible.role: Accessible.Button
+      Accessible.name: text
+
+      onClicked: root.refreshRequested()
+    }
   }
 
   Text {

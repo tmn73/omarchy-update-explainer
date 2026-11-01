@@ -211,8 +211,10 @@ if [[ -f $ROOT/VerdictBlock.qml ]]; then
 fi
 if [[ -f $ROOT/TintButton.qml ]]; then
   has TintButton.qml 'Button \{' "TintButton.qml is not a stock Button"
-  has TintButton.qml 'Math\.max\(Style\.space\(48\), 48\)' "TintButton is under 48 px"
-  has TintButton.qml 'Style\.space\(12\)' "TintButton has no radius of 12"
+  has TintButton.qml 'Math\.max\(Style\.space\(34\), 34\)' "TintButton is not 34 px high"
+  has TintButton.qml 'radius: Style\.space\(8\)' "TintButton has no radius of 8"
+  has TintButton.qml 'horizontalPadding: Style\.space\(16\)' "TintButton has no 16 px padding"
+  hasnt TintButton.qml 'Style\.space\((44|48)\)|width: parent' "TintButton is large or full width"
   hasnt TintButton.qml 'iconText' "TintButton has an icon"
 fi
 if [[ -f $ROOT/ActionBar.qml ]]; then
@@ -230,12 +232,16 @@ if [[ -f $ROOT/ActionBar.qml ]]; then
   has Panel.qml 'onActivateRequested: actions\.activateFocused\(\)' "Enter and Space do not activate a button"
   has ActionBar.qml 'function moveFocus\(' "ActionBar.qml has no moveFocus"
   has ActionBar.qml 'function activateFocused\(' "ActionBar.qml has no activateFocused"
-  buttons=$(grep -cE '^  Button \{' "$ROOT/ActionBar.qml" || true)
+  buttons=$(grep -cE '^    Button \{' "$ROOT/ActionBar.qml" || true)
   ((buttons == 2)) || fail "ActionBar.qml has $buttons plain Buttons, expected 2"
   focusables=$(grep -cE 'focusable: true' "$ROOT/ActionBar.qml" || true)
   ((focusables == 2)) || fail "ActionBar.qml has $focusables focusable plain buttons, expected 2"
   hasnt ActionBar.qml 'TapHandler' "ActionBar.qml still uses a TapHandler"
-  has ActionBar.qml 'Math\.max\(Style\.space\(44\), 44\)' "Update now is under 44 px"
+  # Compact on purpose: a desktop mouse and keyboard panel, so the 44 px touch
+  # target rule does not apply. Buttons are about 34 px, sized to their text.
+  has ActionBar.qml 'Flow \{' "the buttons are not on one wrapping row"
+  grep -c 'Math\.max(Style\.space(34), 34)' "$ROOT/ActionBar.qml" | grep -qx 2 || fail "the ActionBar buttons are not 34 px"
+  hasnt ActionBar.qml 'Style\.space\((44|48)\)' "ActionBar.qml keeps a 44 or 48 px button"
   grep -c 'Accessible\.name' "$ROOT/ActionBar.qml" | grep -qx 2 || fail "each button needs an Accessible.name"
   has ActionBar.qml 'Model\.explainLabel' "the primary label does not come from Model.explainLabel"
   has ActionBar.qml 'chooseRequested' "ActionBar.qml has no choose signal"

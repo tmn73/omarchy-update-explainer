@@ -9,11 +9,12 @@ Button {
   id: root
 
   focusable: true
-  height: Math.max(Style.space(48), 48)
+  height: Math.max(Style.space(34), 34)
   background: Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.12)
   foreground: Commons.Color.accent
   fontSize: Style.font.body
-  radius: Style.space(12)
+  radius: Style.space(8)
+  horizontalPadding: Style.space(16)
 
   Accessible.role: Accessible.Button
   Accessible.name: text
