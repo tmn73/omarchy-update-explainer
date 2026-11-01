@@ -1,5 +1,3 @@
-.pragma library
-
 // Pure logic for the update explainer widget: parsing the helper summary,
 // deriving the status, and building the text the UI and the agent receive.
 //

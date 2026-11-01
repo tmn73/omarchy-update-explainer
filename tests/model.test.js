@@ -1,18 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert')
-const fs = require('node:fs')
-const path = require('node:path')
-
-// QML needs ".pragma library" on the first line, which is not valid JS.
-// Strip it, then compile the rest as a CommonJS module.
-function loadModel() {
-  const file = path.join(__dirname, '..', 'Model.js')
-  const source = fs.readFileSync(file, 'utf8').replace(/^\.pragma library\s*$/m, '')
-  const m = { exports: {} }
-  new Function('module', 'exports', source)(m, m.exports)
-  return m.exports
-}
-const Model = loadModel()
+const Model = require('../Model.js')
 
 function summary(over) {
   return Object.assign({
