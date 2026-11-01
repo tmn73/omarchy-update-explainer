@@ -42,7 +42,11 @@ Panel {
     }
   }
 
-  Service { id: updates }
+  Service {
+    id: updates
+
+    settings: root.settings
+  }
 
   IpcHandler {
     target: root.ipcTarget

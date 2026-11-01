@@ -101,13 +101,55 @@ if [[ -f $ROOT/Service.qml ]]; then
   hasnt $S "/home/|/usr/local/" "Service.qml contains an absolute path"
 fi
 
-# ---- Every Text is plain text (package data is hostile)
+# ---- Every Text block is plain text and wraps its literals in qsTr (package data is hostile)
+
+# Prints one line per broken Text block. Works per block by tracking brace depth.
+text_block_problems() {
+  awk '
+    function flush() {
+      if (!plain) print FILENAME ":" start ": Text block without textFormat: Text.PlainText"
+      if (literal) print FILENAME ":" start ": Text block with a literal text outside qsTr"
+      inblock = 0
+    }
+    {
+      line = $0
+      if (!inblock && line ~ /(^|[^A-Za-z0-9_.])Text[ \t]*\{/) {
+        inblock = 1; depth = 0; plain = 0; literal = 0; start = FNR
+      }
+      if (inblock) {
+        if (line ~ /textFormat:[ \t]*Text\.PlainText/) plain = 1
+        if (line ~ /(^|[ \t{;])text:[ \t]*"[^"]/) literal = 1
+        n = gsub(/\{/, "{", line); m = gsub(/\}/, "}", line)
+        depth += n - m
+        if (depth <= 0) flush()
+      }
+    }
+  ' "$1"
+}
+
+# The checker must reject a deliberately broken sample.
+sample=$(mktemp --suffix=.qml)
+cat >"$sample" <<'QML'
+Item {
+  Text {
+    textFormat: Text.PlainText
+    textFormat: Text.PlainText
+    text: "raw literal"
+  }
+  Text{
+    anchors.centerIn: parent
+    text: qsTr("no plain format")
+  }
+}
+QML
+problems=$(text_block_problems "$sample" | wc -l)
+rm -f "$sample"
+((problems == 2)) || fail "the Text block check found $problems problems in the broken sample, expected 2"
 
 for file in "$ROOT"/*.qml; do
-  name=$(basename "$file")
-  total=$(grep -cE '^[[:space:]]*Text \{' "$file" || true)
-  plain=$(grep -cE 'textFormat: Text\.PlainText' "$file" || true)
-  ((total == plain)) || fail "$name has $total Text items and $plain PlainText settings"
+  while IFS= read -r problem; do
+    [[ -n $problem ]] && fail "$problem"
+  done < <(text_block_problems "$file")
 done
 
 # ---- Panel, SourceList and ActionBar
@@ -132,6 +174,7 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'Service \{' "Panel.qml does not instantiate the Service"
   has Panel.qml 'Accessible\.name' "the bar button has no Accessible.name"
   has Panel.qml 'Model\.verdictLine' "Panel.qml does not show the verdict line"
+  has Panel.qml 'settings: root\.settings' "Panel.qml does not pass settings to the Service"
   hasnt Panel.qml 'omarchy\.system-update' "Panel.qml touches the stock update widget"
 fi
 if [[ -f $ROOT/SourceList.qml ]]; then
@@ -151,8 +194,16 @@ for file in "$ROOT"/Panel.qml "$ROOT"/SourceList.qml "$ROOT"/ActionBar.qml; do
   [[ -f $file ]] || continue
   name=$(basename "$file")
   hasnt "$name" '[—–]' "$name has an em or en dash"
-  hasnt "$name" 'Text \{[^}]*text: "[A-Za-z]' "$name has a user string outside qsTr"
 done
+
+# ---- The refresh setting is wired
+
+has Service.qml 'refreshIntervalSec' "Service.qml does not read refreshIntervalSec"
+has Service.qml 'interval: root\.refreshIntervalSec' "the Timer interval does not follow refreshIntervalSec"
+[[ -f $ROOT/AgentNotice.qml ]] || fail "AgentNotice.qml is missing"
+has ActionBar.qml 'AgentNotice' "ActionBar.qml does not use AgentNotice"
+has AgentNotice.qml 'No default agent yet' "AgentNotice.qml has no title"
+has AgentNotice.qml 'LineDash|Qt\.DashLine|dash' "AgentNotice.qml has no dashed border"
 
 # ---- Result
 

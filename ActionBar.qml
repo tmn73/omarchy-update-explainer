@@ -19,6 +19,12 @@ Column {
 
   spacing: Style.space(12)
 
+  AgentNotice {
+    width: parent.width
+    visible: root.agent === ""
+    fontFamily: root.fontFamily
+  }
+
   Rectangle {
     id: primary
 
@@ -56,18 +62,6 @@ Column {
     horizontalAlignment: Text.AlignHCenter
     wrapMode: Text.WordWrap
     text: qsTr("Opens your default agent in a terminal. You start it, nothing runs in the background.")
-    color: Commons.Color.muted
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.bodySmall
-  }
-
-  Text {
-    textFormat: Text.PlainText
-    width: parent.width
-    visible: root.agent === ""
-    horizontalAlignment: Text.AlignHCenter
-    wrapMode: Text.WordWrap
-    text: qsTr("Omarchy picks none for you. Choose one and the explanation runs in it.")
     color: Commons.Color.muted
     font.family: root.fontFamily
     font.pixelSize: Style.font.bodySmall

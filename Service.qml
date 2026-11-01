@@ -15,12 +15,27 @@ import "Model.js" as Model
 Item {
   id: root
 
+  property var settings: ({})
   property var summary: null
   property string runState: "loading"
   property string message: ""
   property string fetchedAt: ""
   property string agent: ""
   property bool busy: false
+
+  readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 1800, 300, 21600)
+
+  function setting(name, fallback) {
+    var value = settings ? settings[name] : undefined
+    return value === undefined || value === null ? fallback : value
+  }
+
+  function intSetting(name, fallback, minimum, maximum) {
+    var value = parseInt(String(setting(name, fallback)), 10)
+    if (!isFinite(value))
+      value = fallback
+    return Math.max(minimum, Math.min(maximum, value))
+  }
 
   readonly property string status: Model.statusOf(summary, runState)
   readonly property string tooltip: Model.tooltip(summary, status)
@@ -111,7 +126,7 @@ Item {
   Component.onDestruction: removeReport()
 
   Timer {
-    interval: 6 * 60 * 60 * 1000
+    interval: root.refreshIntervalSec * 1000
     repeat: true
     running: true
     triggeredOnStart: true
