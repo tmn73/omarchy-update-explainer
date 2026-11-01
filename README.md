@@ -91,8 +91,9 @@ subscription use. The plugin holds no API key and has no provider setting.
   laptop or board model and vendor, the CPU model, the GPU names, the kernel
   and Omarchy versions, and the session type. The agent uses it to say whether
   each change affects you. The section holds model names only: no serial
-  numbers, UUIDs, MAC addresses or hostnames. The report stays on your machine,
-  and only the agent you chose reads it.
+  numbers, UUIDs, MAC addresses or hostnames. The file stays local (in
+  `$XDG_RUNTIME_DIR`, mode 600, removed when nothing is pending). The agent you
+  chose reads it and sends it to its model provider like any prompt.
 - **No update data in a command line.** The agent gets fixed instructions and
   the path of the report file. The update data stays in the file.
 - **No GitHub call.** The collector runs `checkupdates`, `yay -Qua` and

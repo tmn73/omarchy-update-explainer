@@ -48,7 +48,7 @@ reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
     STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
     STUB_CHECK_LOCKDIR STUB_CHECK_DBLOG STUB_FAKEROOT_LOG \
-    STUB_CPU STUB_KERNEL_RELEASE STUB_OMARCHY_Q UPDATE_EXPLAINER_DMI_DIR XDG_SESSION_TYPE
+    UPDATE_EXPLAINER_LOCK_WAIT STUB_CPU STUB_KERNEL_RELEASE STUB_OMARCHY_Q UPDATE_EXPLAINER_DMI_DIR XDG_SESSION_TYPE
   export XDG_RUNTIME_DIR="$sandbox/run"
   rm -rf "$sandbox/run"
   MODE_ARGS=(--summary)
@@ -435,7 +435,45 @@ report_small_download() {
   grep -q -x -F "TOTAL download: 0 MiB" "$sandbox/report.txt" || fail "report_small_download zero bytes keeps 0 MiB"
 }
 
-for case_name in report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+report_mise_no_paths() {
+  report_env
+  export STUB_MISE="$MISE_ROWS"
+  run_case
+  local section
+  section=$(awk '/^## Mise$/{f=1;next} /^## /{f=0} f' "$sandbox/report.txt")
+  grep -q -x -F "node 20.0.0 22.1.0" <<<"$section" || fail "report_mise_no_paths: node row: $section"
+  grep -q -x -F "python 3.12.1 3.12.4" <<<"$section" || fail "report_mise_no_paths: python row: $section"
+  grep -q -F -e "/home/" -e ".toml" -e "/etc/" <<<"$section" && fail "report_mise_no_paths: a source path is in the report"
+  return 0
+}
+
+lock_timeout() {
+  reset_env
+  export STUB_TRANSACTION='foo 2.0-1 extra 1048576' UPDATE_EXPLAINER_LOCK_WAIT=1
+  mkdir -p -m 700 "$sandbox/run/update-explainer"
+  local holder
+  flock "$sandbox/run/update-explainer/collect.lock" sleep 4 &
+  holder=$!
+  sleep 0.5
+  run_case
+  kill "$holder" 2>/dev/null
+  wait "$holder" 2>/dev/null
+  [[ $code -eq 0 ]] || fail "lock_timeout exit $code"
+  assert_jq '.state=="error" and (.message|test("another update check"))' "$out" "lock_timeout summary"
+  report_env
+  export UPDATE_EXPLAINER_LOCK_WAIT=1
+  mkdir -p -m 700 "$sandbox/run/update-explainer"
+  flock "$sandbox/run/update-explainer/collect.lock" sleep 4 &
+  holder=$!
+  sleep 0.5
+  run_case
+  kill "$holder" 2>/dev/null
+  wait "$holder" 2>/dev/null
+  [[ $code -eq 0 ]] || fail "lock_timeout report exit $code"
+  assert_jq '.state=="error" and (.message|test("another update check"))' "$out" "lock_timeout report"
+}
+
+for case_name in report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures

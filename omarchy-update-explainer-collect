@@ -114,7 +114,11 @@ if [[ -n $runtime_dir ]] && command -v flock >/dev/null 2>&1; then
   state_dir="$runtime_dir/update-explainer"
   if mkdir -p -m 700 "$state_dir" 2>/dev/null && exec {lock_fd}>"$state_dir/collect.lock" 2>/dev/null; then
     export CHECKUPDATES_DB="$state_dir/checkup-db/"
-    flock "$lock_fd"
+    if ! flock -w "${UPDATE_EXPLAINER_LOCK_WAIT:-120}" "$lock_fd"; then
+      wait_background
+      fail_out "another update check is still running, try again in a moment"
+      exit 0
+    fi
   else
     lock_fd=""
   fi
@@ -178,8 +182,9 @@ fi
 download_partial=false
 (( n_aur + n_mise > 0 )) && download_partial=true
 
-# The first five items of each source, for the panel. Names and versions reach
-# jq as data on stdin, never through string building.
+# The first five items of each source, for the panel. Each list is built by jq
+# from tab separated lines on stdin, never by string building, and the finished
+# JSON arrays reach the final jq as --argjson values.
 declare -A check_old=()
 while read -r cname cold carrow _; do
   [[ $carrow == "->" ]] && check_old[$cname]=$cold
@@ -371,6 +376,8 @@ report_reboot() {
 }
 
 write_report() {
+  # Tool, current and latest only: the config path adds nothing and can hold a user name.
+  awk 'NF >= 4 { print $1, $3, $4 }' "$work/mise" >"$work/mise.report"
   {
     report_machine | section "This machine"
     report_pacman | section "Pacman packages"
@@ -378,7 +385,7 @@ write_report() {
     report_local_edits | section "Local edits the upgrade overwrites"
     report_migrations | section "Pending migrations"
     report_orphans | section "Orphans"
-    report_file_or_none "$work/mise" | section "Mise"
+    report_file_or_none "$work/mise.report" | section "Mise"
     report_file_or_none "$work/aur" | section "AUR"
     report_reboot | section "Reboot hints"
   } >"$tmp_report"
