@@ -79,8 +79,12 @@ if [[ -f $ROOT/Service.qml ]]; then
   # Report file handling
   has $S 'XDG_RUNTIME_DIR' "the report dir is not under XDG_RUNTIME_DIR"
   has $S '"mkdir", "-p", "-m", "700"' "the report dir is not created with mode 700"
-  has $S '"rm", "-f"' "the report file is never removed"
-  has $S 'Component\.onDestruction' "the report is not removed on destruction"
+  # Removal must survive teardown, so it is detached, not a child Process.
+  has $S 'Component\.onDestruction: removeReport\(\)' "destruction does not remove the report"
+  body=$(awk '/function removeReport\(\)/{f=1} f{print} f&&/^  }$/{exit}' "$ROOT/$S")
+  grep -qE 'Quickshell\.execDetached\(\["rm", "-f", reportPath\]\)' <<<"$body" \
+    || fail "removeReport does not use execDetached with rm -f"
+  hasnt $S 'cleanupProcess' "the report is removed through a child Process that dies with the item"
   has $S '"--report"' "explain does not ask for a report"
   has $S '"--summary"' "refresh does not ask for a summary"
   has $S 'if \(busy\) return|if \(root\.busy\) return' "a second explain() while busy is not ignored"

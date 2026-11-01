@@ -64,10 +64,8 @@ Item {
 
   function removeReport() {
     if (runtimeDir === "") return
-    if (!cleanupProcess.running) {
-      cleanupProcess.command = ["rm", "-f", reportPath]
-      cleanupProcess.running = true
-    }
+    // Detached so it still runs when this item is being destroyed.
+    Quickshell.execDetached(["rm", "-f", reportPath])
   }
 
   // The helper writes into the directory but does not create it, so each
@@ -200,12 +198,5 @@ Item {
     onExited: function (exitCode) {
       root.refresh()
     }
-  }
-
-  Process {
-    id: cleanupProcess
-
-    running: false
-    command: []
   }
 }
