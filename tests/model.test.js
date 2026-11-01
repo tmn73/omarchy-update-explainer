@@ -403,3 +403,39 @@ test('explainAfterRefresh: a queued report starts only when updates are pending'
   assert.notStrictEqual(failed.error, none.error)
   assert.doesNotMatch(none.error + failed.error, /[0-9]/)
 })
+
+// ---- version text for dev package versions
+
+function oneRow(from, to) {
+  const s = summary({
+    omarchy: { pending: false, package: '', from: '', to: '' },
+    sources: { pacman: 1, aur: 0, mise: 0 },
+    items: { pacman: [{ name: 'pkg', from: from, to: to }], aur: [], mise: [] }
+  })
+  return Model.sections(s)[0].rows[0].version
+}
+
+test('dev versions show the short git hashes on both sides', () => {
+  assert.strictEqual(oneRow('4.0.0.r7534.g7eedd17-1', '4.0.0.r7537.g5a4f136-1'), '7eedd17 to 5a4f136')
+  assert.strictEqual(oneRow('1.r1.gabcdef0123456-2', '1.r2.g0123456abcdef-1'), 'abcdef0 to 0123456')
+})
+
+test('the Omarchy section uses the same rule', () => {
+  const s = summary({ omarchy: { pending: true, package: 'omarchy-dev', from: '4.0.0.r7534.g7eedd17-1', to: '4.0.0.r7537.g5a4f136-1' } })
+  assert.strictEqual(Model.sections(s)[0].rows[0].version, '7eedd17 to 5a4f136')
+})
+
+test('plain versions are unchanged', () => {
+  assert.strictEqual(oneRow('0.30-3', '0.30-4'), '0.30-3 to 0.30-4')
+})
+
+test('when only one side is a dev version, both full strings stay', () => {
+  assert.strictEqual(oneRow('4.0.0.r7534.g7eedd17-1', '4.1-1'), '4.0.0.r7534.g7eedd17-1 to 4.1-1')
+  assert.strictEqual(oneRow('4.1-1', '4.0.0.r7537.g5a4f136-1'), '4.1-1 to 4.0.0.r7537.g5a4f136-1')
+})
+
+test('the version text always contains " to " when both sides are known', () => {
+  for (const [a, b] of [['0.30-3', '0.30-4'], ['4.0.0.r1.g7eedd17-1', '4.0.0.r2.g5a4f136-1'], ['1', '2']]) {
+    assert.match(oneRow(a, b), / to /)
+  }
+})

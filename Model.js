@@ -73,8 +73,17 @@ function verdict(summary) {
 
 var MAX_ROWS = 4
 
+var DEV_VERSION = /\.g([0-9a-f]{7,})-[0-9]+$/
+
+// "old to new". Dev package versions are long and the shell elides the middle
+// of a long text, which would hide the change, so when both sides carry a git
+// hash the row shows the first seven characters of each hash.
 function versionText(item) {
-  return item.from ? item.from + " to " + item.to : String(item.to || "")
+  if (!item.from) return String(item.to || "")
+  var a = DEV_VERSION.exec(item.from)
+  var b = DEV_VERSION.exec(item.to || "")
+  if (a && b) return a[1].slice(0, 7) + " to " + b[1].slice(0, 7)
+  return item.from + " to " + item.to
 }
 
 function listOf(summary, key) {
