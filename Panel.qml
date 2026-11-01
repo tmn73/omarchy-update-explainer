@@ -37,6 +37,7 @@ Panel {
 
   onOpenedChanged: {
     if (opened) {
+      actions.cursor = -1
       updates.refresh()
       Qt.callLater(function () { keyCatcher.forceActiveFocus() })
     }
@@ -104,6 +105,8 @@ Panel {
 
       anchors.fill: parent
       onCloseRequested: root.close()
+      onTabRequested: function (direction) { actions.moveFocus(direction) }
+      onActivateRequested: actions.activateFocused()
       onTextKey: function (character) {
         if (String(character || "").toLowerCase() === "r")
           updates.refresh()
@@ -171,9 +174,13 @@ Panel {
         }
 
         ActionBar {
+          id: actions
+
           width: parent.width
           agent: updates.agent
           busy: updates.busy
+          summary: updates.summary
+          explainError: updates.explainError
           fontFamily: root.fontFamily
           onExplainRequested: updates.explain()
           onChooseRequested: updates.chooseAgent()

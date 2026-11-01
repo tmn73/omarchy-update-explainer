@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Commons as Commons
 import qs.Commons
+import qs.Ui
 import "Model.js" as Model
 
 // The two actions at the bottom of the panel. The primary button explains the
@@ -11,6 +12,10 @@ Column {
 
   property string agent: ""
   property bool busy: false
+  property var summary: null
+  property string explainError: ""
+  // Keyboard cursor: -1 none, 0 the primary button, 1 Update now.
+  property int cursor: -1
   property string fontFamily: Style.font.family
 
   signal explainRequested()
@@ -19,40 +24,49 @@ Column {
 
   spacing: Style.space(12)
 
+  function primaryAction() {
+    if (!primary.enabled) return
+    if (agent === "") chooseRequested()
+    else explainRequested()
+  }
+
+  // Tab and Shift+Tab move the cursor between the two buttons.
+  function moveFocus(direction) {
+    cursor = cursor < 0 ? (direction > 0 ? 0 : 1) : (cursor + direction + 2) % 2
+  }
+
+  // Enter and Space act on the cursor, or on the primary button when none is set.
+  function activateFocused() {
+    if (cursor === 1) updateRequested()
+    else primaryAction()
+  }
+
   AgentNotice {
     width: parent.width
     visible: root.agent === ""
     fontFamily: root.fontFamily
   }
 
-  Rectangle {
+  Button {
     id: primary
 
     width: parent.width
     height: Math.max(Style.space(48), 48)
+    text: Model.explainLabel(root.agent, root.busy)
+    focusable: true
+    hasCursor: root.cursor === 0
+    enabled: Model.explainEnabled(root.summary, root.agent, root.busy)
+    opacity: enabled ? 1 : 0.5
+    background: Commons.Color.accent
+    foreground: Commons.Color.background
+    fontFamily: root.fontFamily
+    fontSize: Style.font.body
     radius: Style.space(10)
-    opacity: root.busy ? 0.5 : 1
-    color: Commons.Color.accent
 
     Accessible.role: Accessible.Button
-    Accessible.name: primaryLabel.text
+    Accessible.name: text
 
-    Text {
-      id: primaryLabel
-
-      textFormat: Text.PlainText
-      anchors.centerIn: parent
-      text: Model.explainLabel(root.agent)
-      color: Commons.Color.background
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.body
-      font.bold: true
-    }
-
-    TapHandler {
-      enabled: !root.busy
-      onTapped: root.agent === "" ? root.chooseRequested() : root.explainRequested()
-    }
+    onClicked: root.primaryAction()
   }
 
   Text {
@@ -67,26 +81,31 @@ Column {
     font.pixelSize: Style.font.bodySmall
   }
 
-  Rectangle {
+  Button {
     width: parent.width
     height: Math.max(Style.space(44), 44)
+    text: qsTr("Update now")
+    focusable: true
+    hasCursor: root.cursor === 1
+    bordered: true
+    fontFamily: root.fontFamily
+    fontSize: Style.font.body
     radius: Style.space(10)
-    color: "transparent"
-    border.width: 1
-    border.color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.3)
 
     Accessible.role: Accessible.Button
-    Accessible.name: qsTr("Update now")
+    Accessible.name: text
 
-    Text {
-      textFormat: Text.PlainText
-      anchors.centerIn: parent
-      text: qsTr("Update now")
-      color: Commons.Color.foreground
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.body
-    }
+    onClicked: root.updateRequested()
+  }
 
-    TapHandler { onTapped: root.updateRequested() }
+  Text {
+    textFormat: Text.PlainText
+    width: parent.width
+    visible: root.explainError !== ""
+    wrapMode: Text.WordWrap
+    text: root.explainError
+    color: Commons.Color.urgent
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.bodySmall
   }
 }

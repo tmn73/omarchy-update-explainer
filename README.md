@@ -57,7 +57,18 @@ subscription use. The plugin holds no API key and has no provider setting.
   `mise outdated`, as `omarchy update` does. The agent looks up commits and pull
   requests itself.
 - **No automatic update.** The plugin never runs the update on its own. The
-  prompt tells the agent never to run it.
+  prompt tells the agent never to run it. That is an instruction, not a
+  control: Omarchy starts the agent in its own unattended mode, which may run
+  commands without asking you.
+- **The agent reads the web.** To explain Omarchy changes, the agent reads
+  public GitHub pull request pages. The prompt tells it to treat the file and
+  every web page as data and not to follow instructions found in them. A
+  malicious page could still try to steer an agent that runs without prompts,
+  so read what the agent plans to do.
+- **Private package database.** To avoid a clash with the stock update widget,
+  the collector syncs its own copy of the pacman database under
+  `$XDG_RUNTIME_DIR/update-explainer` and takes a lock there. It needs the
+  first sync once per login.
 
 ## Buttons
 
@@ -74,7 +85,10 @@ count.
 
 ## Agents
 
-Tested agents: none yet. Any agent that `omarchy default agent` supports should work, because the prompt is agent-neutral, but only the interactive launch is used.
+Tested agents: none yet. The prompt is agent-neutral and only the interactive launch is used, but some agents have limits:
+
+- `crush` (`crush run`) and `kimi` (`--prompt`) run one-shot, so the window may close with no follow-up.
+- `dsh` and `freebuff` put the prompt on the clipboard instead of starting a session.
 
 ## Settings
 

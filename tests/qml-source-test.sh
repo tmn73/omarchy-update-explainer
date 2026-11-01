@@ -51,19 +51,26 @@ if [[ -f $ROOT/Service.qml ]]; then
   has $S "triggeredOnStart: true" "the Timer does not fire on start"
 
   # The interface Panel.qml binds to
-  for property in summary status runState agent message fetchedAt busy tooltip; do
+  for property in summary status runState agent message explainError fetchedAt busy tooltip; do
     has $S "property .* $property\b" "Service.qml no longer exposes $property"
   done
   for method in refresh explain updateNow chooseAgent; do
     has $S "function $method\(" "Service.qml no longer has $method()"
   done
 
-  # A failed refresh keeps the last good summary: summary is assigned in one
-  # place only, and that place is guarded by the ok branch.
+  # A failed refresh keeps the last good summary: Model.nextState (unit tested
+  # in model.test.js) decides, and the Service only applies what it returns.
   assigns=$(grep -cE '^[[:space:]]*(root\.)?summary = ' "$ROOT/$S" || true)
   ((assigns == 1)) || fail "summary is assigned $assigns times, expected exactly once"
-  grep -B3 -E '^[[:space:]]*(root\.)?summary = ' "$ROOT/$S" | grep -qE 'parsed\.ok|\.ok\)' \
-    || fail "summary is assigned outside an ok guard"
+  has $S 'summary = next\.summary' "summary is not taken from the reducer result"
+  has $S 'Model\.nextState\(' "apply() does not use Model.nextState"
+  has $S 'if \(next\.removeReport\)' "the report removal does not follow the reducer"
+  hasnt $S 'Model\.parseSummary' "Service.qml parses the summary outside the reducer"
+
+  # Explain failures reach the user, and explain() waits for a refresh.
+  has $S 'property string explainError' "Service.qml has no explainError"
+  has $S 'explainQueued' "explain() does not queue behind a running refresh"
+  has $S 'if \(summaryProcess\.running\)' "explain() does not check the running refresh"
 
   # Argv arrays only: no shell string for the agent or the update
   has $S 'execDetached\(\["omarchy-agent-prompt", Model\.buildPrompt\(' \
@@ -182,7 +189,24 @@ if [[ -f $ROOT/SourceList.qml ]]; then
   has SourceList.qml 'Repeater' "SourceList.qml draws no rows"
 fi
 if [[ -f $ROOT/ActionBar.qml ]]; then
-  has ActionBar.qml 'enabled: !root\.busy|enabled: !busy' "the primary button is not disabled while busy"
+  has ActionBar.qml 'Model\.explainEnabled\(' "the primary button is not gated by Model.explainEnabled"
+  has ActionBar.qml 'Model\.explainLabel\(root\.agent, root\.busy\)' "the busy label does not reach the button"
+  has ActionBar.qml 'property string explainError' "ActionBar.qml cannot show an explain error"
+  has ActionBar.qml 'text: root\.explainError' "ActionBar.qml does not show the explain error"
+  # Keyboard path: the catcher takes Tab, Enter and Space first, so Panel must
+  # forward them, and the buttons must be focusable stock Buttons.
+  has Panel.qml 'onTabRequested: function \(direction\) \{ actions\.moveFocus\(direction\) \}' "Tab does not move between the buttons"
+  has Panel.qml 'onActivateRequested: actions\.activateFocused\(\)' "Enter and Space do not activate a button"
+  has ActionBar.qml 'function moveFocus\(' "ActionBar.qml has no moveFocus"
+  has ActionBar.qml 'function activateFocused\(' "ActionBar.qml has no activateFocused"
+  buttons=$(grep -cE '^  Button \{' "$ROOT/ActionBar.qml" || true)
+  ((buttons == 2)) || fail "ActionBar.qml has $buttons stock Buttons, expected 2"
+  focusables=$(grep -cE 'focusable: true' "$ROOT/ActionBar.qml" || true)
+  ((focusables == 2)) || fail "ActionBar.qml has $focusables focusable buttons, expected 2"
+  hasnt ActionBar.qml 'TapHandler' "ActionBar.qml still uses a TapHandler"
+  has ActionBar.qml 'Math\.max\(Style\.space\(48\), 48\)' "the primary button is under 48 px"
+  has ActionBar.qml 'Math\.max\(Style\.space\(44\), 44\)' "Update now is under 44 px"
+  grep -c 'Accessible\.name' "$ROOT/ActionBar.qml" | grep -qx 2 || fail "each button needs an Accessible.name"
   has ActionBar.qml 'Model\.explainLabel' "the primary label does not come from Model.explainLabel"
   has ActionBar.qml 'chooseRequested' "ActionBar.qml has no choose signal"
   has ActionBar.qml 'explainRequested' "ActionBar.qml has no explain signal"
@@ -190,11 +214,16 @@ if [[ -f $ROOT/ActionBar.qml ]]; then
   has ActionBar.qml 'Update now' "ActionBar.qml has no Update now button"
   hasnt ActionBar.qml 'claude|codex' "ActionBar.qml names an agent"
 fi
-for file in "$ROOT"/Panel.qml "$ROOT"/SourceList.qml "$ROOT"/ActionBar.qml; do
-  [[ -f $file ]] || continue
-  name=$(basename "$file")
-  hasnt "$name" '[—–]' "$name has an em or en dash"
-done
+# No em or en dash in any tracked file. The pattern uses escapes, so this
+# file does not hold the characters itself.
+dash_sample=$(printf 'a \xe2\x80\x94 b \xe2\x80\x93 c')
+grep -qP '[\x{2013}\x{2014}]' <<<"$dash_sample" || fail "the dash check misses a sample with an em and an en dash"
+while IFS= read -r tracked; do
+  [[ -f $ROOT/$tracked ]] || continue
+  if grep -qP '[\x{2013}\x{2014}]' "$ROOT/$tracked"; then
+    fail "$tracked has an em or en dash"
+  fi
+done < <(git -C "$ROOT" ls-files)
 
 # ---- The refresh setting is wired
 
