@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
+# Stub: STUB_AUR lines. STUB_YAY_HANG makes it sleep (its pid goes to STUB_PIDFILE).
+if [[ -n ${STUB_YAY_HANG:-} ]]; then echo $$ >>"${STUB_PIDFILE:-/dev/null}"; exec sleep 60; fi
 [[ -n ${STUB_AUR:-} ]] && printf '%s\n' "$STUB_AUR"
 exit 0

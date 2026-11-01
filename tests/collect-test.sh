@@ -26,7 +26,7 @@ make_sandbox() {
   rm -rf "$sandbox/bin"
   mkdir -p "$sandbox/bin"
   local tool path
-  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls mkdir sleep flock rmdir; do
+  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls mkdir sleep flock rmdir timeout kill; do
     path=$(command -v "$tool" 2>/dev/null) && ln -sf "$path" "$sandbox/bin/$tool"
   done
   for tool in checkupdates fakeroot pacman expac yay mise gh lscpu lspci uname; do
@@ -48,8 +48,11 @@ reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
     STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
     STUB_CHECK_LOCKDIR STUB_CHECK_DBLOG STUB_FAKEROOT_LOG \
-    UPDATE_EXPLAINER_LOCK_WAIT STUB_CPU STUB_KERNEL_RELEASE STUB_OMARCHY_Q UPDATE_EXPLAINER_DMI_DIR XDG_SESSION_TYPE
+    UPDATE_EXPLAINER_LOCK_WAIT UPDATE_EXPLAINER_NET_TIMEOUT UPDATE_EXPLAINER_CHECK_TIMEOUT UPDATE_EXPLAINER_HOOKS_DIR \
+    STUB_YAY_HANG STUB_MISE_HANG STUB_CHECK_HANG STUB_FAKEROOT_HANG STUB_QKK_HANG STUB_QKK STUB_PIDFILE STUB_MISE_LOG STUB_PACMAN_LOG STUB_CPU STUB_KERNEL_RELEASE STUB_OMARCHY_Q UPDATE_EXPLAINER_DMI_DIR XDG_SESSION_TYPE
   export XDG_RUNTIME_DIR="$sandbox/run"
+  export TMPDIR="$sandbox/tmp"
+  rm -rf "$sandbox/tmp"; mkdir -p "$sandbox/tmp"
   rm -rf "$sandbox/run"
   MODE_ARGS=(--summary)
 }
@@ -213,12 +216,12 @@ report_no_github() {
 
 report_hostile_text() {
   report_env
-  local hostile=$'say "hi" \'quoted\'\nsecond line <img src=x> $(id) `id`'
+  local hostile=$'say "hi" \'quoted\' second line <img src=x> $(id) `id`'
   export STUB_DESC="$hostile"
   run_case
   [[ $code -eq 0 ]] || fail "report_hostile exit $code"
   grep -q -F -- "say \"hi\" 'quoted'" "$sandbox/report.txt" || fail "report_hostile first line"
-  grep -q -F -- 'second line <img src=x> $(id) `id`' "$sandbox/report.txt" || fail "report_hostile second line"
+  grep -q -F -- 'second line <img src=x> $(id) `id`' "$sandbox/report.txt" || fail "report_hostile second part"
 }
 
 report_bad_path() {
@@ -274,12 +277,21 @@ lock_private_db() {
 lock_without_runtime_dir() {
   reset_env
   unset XDG_RUNTIME_DIR
-  export STUB_CHECK_DBLOG="$sandbox/dblog"
-  rm -f "$sandbox/dblog"
+  export STUB_CHECK_DBLOG="$sandbox/dblog" STUB_FAKEROOT_LOG="$sandbox/frlog"
+  rm -f "$sandbox/dblog" "$sandbox/frlog"
   export STUB_TRANSACTION='foo 2.0-1 extra 1048576'
   run_case
   assert_jq '.state=="ok" and .total==1' "$out" "lock_without_runtime_dir state"
-  [[ -z $(cat "$sandbox/dblog" 2>/dev/null) ]] || fail "lock_without_runtime_dir: set CHECKUPDATES_DB anyway"
+  local db
+  db=$(head -1 "$sandbox/dblog" 2>/dev/null)
+  [[ $db == "$sandbox/tmp/"* ]] || fail "lock_without_runtime_dir: private db is '$db', expected under the temp dir"
+  [[ $db == */checkup-db-* ]] && fail "lock_without_runtime_dir: used the stock shared path"
+  grep -q -F -- "--dbpath $db" "$sandbox/frlog" || fail "lock_without_runtime_dir: pacman dbpath differs"
+  [[ -e $db ]] && fail "lock_without_runtime_dir: the private db was not cleaned up"
+  MODE_ARGS=(--report "$sandbox/report.txt")
+  run_case
+  db=$(tail -1 "$sandbox/dblog" 2>/dev/null)
+  [[ $db == "$sandbox/tmp/"* && $db != */checkup-db-* ]] || fail "lock_without_runtime_dir report: db '$db'"
 }
 
 lock_overlapping_runs() {
@@ -473,7 +485,180 @@ lock_timeout() {
   assert_jq '.state=="error" and (.message|test("another update check"))' "$out" "lock_timeout report"
 }
 
-for case_name in report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+timeout_env() {
+  reset_env
+  export UPDATE_EXPLAINER_NET_TIMEOUT=1 UPDATE_EXPLAINER_CHECK_TIMEOUT=1
+  export STUB_PIDFILE="$sandbox/pids"
+  rm -f "$sandbox/pids"
+}
+
+timeout_background_tools() {
+  timeout_env
+  export STUB_YAY_HANG=1 STUB_MISE_HANG=1 STUB_CHECK_EXIT=2
+  SECONDS=0
+  run_case
+  (( SECONDS < 20 )) || fail "timeout_background_tools took ${SECONDS}s"
+  [[ $code -eq 0 ]] || fail "timeout_background_tools exit $code"
+  assert_jq '.state=="ok" and .sources.aur==0 and .sources.mise==0' "$out" "timeout_background_tools state"
+  assert_jq '.notes|map(select(contains("AUR") and contains("timed out")))|length>0' "$out" "timeout_background_tools aur note"
+  assert_jq '.notes|map(select(contains("mise") and contains("timed out")))|length>0' "$out" "timeout_background_tools mise note"
+}
+
+timeout_checkupdates() {
+  timeout_env
+  export STUB_CHECK_HANG=1
+  SECONDS=0
+  run_case
+  (( SECONDS < 20 )) || fail "timeout_checkupdates took ${SECONDS}s"
+  [[ $code -eq 0 ]] || fail "timeout_checkupdates exit $code"
+  assert_jq '.state=="error" and (.message|test("timed out"))' "$out" "timeout_checkupdates"
+}
+
+timeout_fakeroot() {
+  timeout_env
+  export STUB_FAKEROOT_HANG=1 STUB_CHECK_OUT=$'foo 1.0-1 -> 2.0-1'
+  run_case
+  assert_jq '.state=="ok" and .total==1 and .downloadMiB==null' "$out" "timeout_fakeroot falls back"
+}
+
+timeout_file_check() {
+  report_env
+  export UPDATE_EXPLAINER_CHECK_TIMEOUT=1 STUB_QKK_HANG=1
+  SECONDS=0
+  run_case
+  (( SECONDS < 20 )) || fail "timeout_file_check took ${SECONDS}s"
+  assert_jq '.state=="ok"' "$out" "timeout_file_check state"
+  grep -q -F "(file check timed out)" "$sandbox/report.txt" || fail "timeout_file_check: no visible timeout line"
+}
+
+timeout_env_validated() {
+  reset_env
+  export UPDATE_EXPLAINER_NET_TIMEOUT="1; touch $sandbox/pwned" STUB_AUR=$'bar 1.0 -> 1.1' STUB_CHECK_EXIT=2
+  run_case
+  [[ -e $sandbox/pwned ]] && fail "timeout_env_validated: the override ran as a command"
+  assert_jq '.sources.aur==1' "$out" "timeout_env_validated falls back to the default"
+}
+
+killed_helper_leaves_nothing() {
+  timeout_env
+  export UPDATE_EXPLAINER_NET_TIMEOUT=50 UPDATE_EXPLAINER_CHECK_TIMEOUT=50
+  export STUB_YAY_HANG=1 STUB_CHECK_HANG=1
+  make_sandbox
+  PATH="$sandbox/bin" "$HELPER" --summary >/dev/null 2>&1 &
+  local helper=$!
+  sleep 1.5
+  kill -TERM "$helper" 2>/dev/null
+  wait "$helper" 2>/dev/null
+  sleep 0.5
+  local pid count=0
+  while read -r pid; do
+    [[ -n $pid ]] || continue
+    count=$((count + 1))
+    kill -0 "$pid" 2>/dev/null && { fail "killed_helper_leaves_nothing: child $pid still runs"; kill "$pid" 2>/dev/null; }
+  done <"$sandbox/pids"
+  (( count >= 2 )) || fail "killed_helper_leaves_nothing: expected two stub children, saw $count"
+  flock -n "$sandbox/run/update-explainer/collect.lock" true || fail "killed_helper_leaves_nothing: the lock is still held"
+}
+
+no_mise_flag() {
+  reset_env
+  export STUB_MISE="$MISE_ROWS" STUB_MISE_LOG="$sandbox/mise-log" STUB_CHECK_EXIT=2
+  rm -f "$sandbox/mise-log"
+  MODE_ARGS=(--summary --no-mise)
+  run_case
+  assert_jq '.sources.mise==0 and .total==0 and .items.mise==[]' "$out" "no_mise_flag summary"
+  assert_jq '.notes|map(select(test("mise")))|length==0' "$out" "no_mise_flag adds no note"
+  [[ -e $sandbox/mise-log ]] && fail "no_mise_flag: mise was called"
+  report_env
+  export STUB_MISE="$MISE_ROWS" STUB_MISE_LOG="$sandbox/mise-log"
+  MODE_ARGS=(--report "$sandbox/report.txt" --no-mise)
+  run_case
+  assert_jq '.state=="ok"' "$out" "no_mise_flag report"
+  [[ -e $sandbox/mise-log ]] && fail "no_mise_flag report: mise was called"
+  grep -q '^node ' "$sandbox/report.txt" && fail "no_mise_flag report: mise rows present"
+  MODE_ARGS=(--summary --bogus)
+  run_case
+  [[ $code -eq 2 ]] || fail "no_mise_flag: an unknown flag must exit 2, got $code"
+}
+
+report_old_versions_and_descriptions_once() {
+  report_env
+  export STUB_TRANSACTION=$'foo 2.0-1 extra 2097152\nbar 3.0-1 extra 1048576'
+  export STUB_OLD_VERSIONS="foo=1.0-1 bar=2.0-1"
+  export STUB_DESC="Same description"
+  local log="$sandbox/expac-log"
+  rm -f "$log"
+  # Wrap expac to count calls.
+  mkdir -p "$sandbox/wrap"
+  cat >"$sandbox/wrap/expac" <<WRAP
+#!/usr/bin/env bash
+echo "\$*" >>"$log"
+exec "$STUBS/expac" "\$@"
+WRAP
+  chmod +x "$sandbox/wrap/expac"
+  make_sandbox
+  ln -sf "$sandbox/wrap/expac" "$sandbox/bin/expac"
+  PATH="$sandbox/bin" "$HELPER" --report "$sandbox/report.txt" >/dev/null 2>&1
+  grep -q -F "foo 1.0-1 -> 2.0-1 [extra] 2 MiB | Same description" "$sandbox/report.txt" || fail "report once: foo line"
+  grep -q -F "bar 2.0-1 -> 3.0-1 [extra] 1 MiB | Same description" "$sandbox/report.txt" || fail "report once: bar line"
+  local s_calls
+  s_calls=$(grep -c -- '^-S' "$log")
+  (( s_calls == 1 )) || fail "report once: expected one expac -S call, saw $s_calls"
+}
+
+report_caps() {
+  report_env
+  local lines="" i
+  for i in $(seq 1 3000); do lines+="pkg$i 1.0-1 extra 1048576"$'\n'; done
+  export STUB_TRANSACTION=${lines%$'\n'}
+  export STUB_DESC=$(head -c 200 /dev/zero | tr '\0' 'd')
+  run_case
+  local size
+  size=$(stat -c %s "$sandbox/report.txt")
+  (( size <= 262144 + 200 )) || fail "report_caps: report is $size bytes"
+  grep -q -F "[truncated: the report was cut at 256 KiB]" "$sandbox/report.txt" || fail "report_caps: no visible truncation line"
+  report_env
+  export STUB_AUR=$(printf 'name 1.0 -> 2.0 %0300d' 0)
+  run_case
+  local longest
+  longest=$(awk '/^## AUR$/{f=1;next} /^## /{f=0} f {print length}' "$sandbox/report.txt" | sort -n | tail -1)
+  (( longest <= 120 )) || fail "report_caps: an AUR line has $longest characters"
+}
+
+reboot_checks_only_candidates() {
+  report_env
+  export STUB_TRANSACTION=$'foo 1.0-1 core 1048576\nlinux-lts 6.2-1 core 1048576\nbar 1.0-1 core 1048576'
+  export STUB_KERNEL_PKG=linux-lts STUB_PACMAN_LOG="$sandbox/pmlog"
+  rm -f "$sandbox/pmlog"
+  run_case
+  grep -q -x -F "Qlq linux-lts" "$sandbox/pmlog" || fail "reboot_checks: the kernel package was not checked"
+  grep -q -E "Qlq (foo|bar)" "$sandbox/pmlog" && fail "reboot_checks: an unrelated package was file listed"
+  grep -q -F "kernel: linux-lts" "$sandbox/report.txt" || fail "reboot_checks: report lost the kernel hint"
+  MODE_ARGS=(--summary)
+  run_case
+  assert_jq '.reboot==true' "$out" "reboot_checks summary"
+  export STUB_TRANSACTION=$'foo 1.0-1 core 1048576\nhyprland 1.0-1 extra 1048576'
+  unset STUB_KERNEL_PKG
+  run_case
+  assert_jq '.reboot==true' "$out" "reboot_checks hyprland"
+  export STUB_TRANSACTION=$'nvidia-utils 1.0-1 extra 1048576'
+  run_case
+  assert_jq '.reboot==true' "$out" "reboot_checks nvidia"
+}
+
+hooks_show_no_exec_line() {
+  report_env
+  mkdir -p "$sandbox/hooks"
+  printf '[Trigger]\nTarget = foo\n[Action]\nExec = /usr/bin/secret-exec-sentinel\n' >"$sandbox/hooks/patch.hook"
+  export UPDATE_EXPLAINER_HOOKS_DIR="$sandbox/hooks"
+  export STUB_QKK='warning: foo: /etc/foo.conf (Size mismatch)'
+  run_case
+  grep -q -F "patch.hook: foo" "$sandbox/report.txt" || fail "hooks: name and target missing: $(grep -A3 'Local edits' "$sandbox/report.txt")"
+  grep -q -F "secret-exec-sentinel" "$sandbox/report.txt" && fail "hooks: the Exec line is in the report"
+  return 0
+}
+
+for case_name in timeout_background_tools timeout_checkupdates timeout_fakeroot timeout_file_check timeout_env_validated killed_helper_leaves_nothing no_mise_flag report_old_versions_and_descriptions_once report_caps reboot_checks_only_candidates hooks_show_no_exec_line report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures

@@ -1,23 +1,65 @@
 #!/usr/bin/env bash
 # Print what `omarchy update` would change right now, as one JSON document.
-# Read only: it never changes the system and makes no call to GitHub.
+# Read only: it never changes the system. It makes no call to GitHub itself,
+# but `mise outdated` may contact the tool sources (GitHub among them), and
+# `checkupdates` and `yay -Qua` use the network as `omarchy update` does.
+# Every external tool runs under `timeout`, so nothing can hang the widget.
 # Contract: one JSON document on stdout, exit 0 for every failure the user can meet.
+#
+# Usage: omarchy-update-explainer-collect (--summary | --report <file>) [--no-mise]
+#
+# Test hooks (digits only for the timeouts, anything else is ignored):
+# UPDATE_EXPLAINER_NET_TIMEOUT, UPDATE_EXPLAINER_CHECK_TIMEOUT (seconds),
+# UPDATE_EXPLAINER_LOCK_WAIT, UPDATE_EXPLAINER_DMI_DIR, UPDATE_EXPLAINER_HOOKS_DIR.
 set -uo pipefail
 
-mode=${1:-}
-report_file=${2:-}
-if [[ $mode == --report && -n $report_file && $# -eq 2 ]]; then
-  :
-elif [[ $mode == --summary && $# -eq 1 ]]; then
-  :
-else
-  echo "usage: omarchy-update-explainer-collect --summary | --report <file>" >&2
+usage() {
+  echo "usage: omarchy-update-explainer-collect (--summary | --report <file>) [--no-mise]" >&2
   exit 2
-fi
+}
+
+mode=${1:-}
+report_file=""
+skip_mise=false
+case $mode in
+  --summary) shift ;;
+  --report)
+    shift
+    report_file=${1:-}
+    [[ -n $report_file ]] || usage
+    shift
+    ;;
+  *) usage ;;
+esac
+for arg in "$@"; do
+  [[ $arg == --no-mise ]] && skip_mise=true || usage
+done
+
+# Seconds from a test hook, or the default when the value is not plain digits.
+seconds_or() {
+  [[ ${1:-} =~ ^[0-9]+$ ]] && (( 10#$1 > 0 )) && echo "$((10#$1))" || echo "$2"
+}
+net_timeout=$(seconds_or "${UPDATE_EXPLAINER_NET_TIMEOUT:-}" 60)
+check_timeout=$(seconds_or "${UPDATE_EXPLAINER_CHECK_TIMEOUT:-}" 180)
 
 work=$(mktemp -d) || exit 1
 tmp_report=""
-trap 'rm -rf "$work"; [[ -n $tmp_report ]] && rm -f "$tmp_report"' EXIT
+private_db=""
+aur_pid=""
+mise_pid=""
+fg_pid=""
+cleanup() {
+  local pid
+  for pid in "$aur_pid" "$mise_pid" "$fg_pid"; do
+    [[ -n $pid ]] && kill "$pid" 2>/dev/null
+  done
+  rm -rf "$work"
+  [[ -n $tmp_report ]] && rm -f "$tmp_report"
+  [[ -n $private_db ]] && rm -rf "$private_db"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 143' TERM INT HUP
 
 notes=()
 note() { notes+=("$1"); }
@@ -70,30 +112,59 @@ if [[ $mode == --report ]]; then
   chmod 600 "$tmp_report"
 fi
 
-# Slow network calls run in the background while pacman syncs.
-aur_pid=""
-mise_pid=""
+# Slow network calls run in the background while pacman syncs. The tool runs
+# under timeout and is the background process itself, so the cleanup trap can
+# kill it. Output is capped and filtered after the wait.
+aur_status=0
+mise_status=0
 : >"$work/aur"
 : >"$work/mise"
 if command -v yay >/dev/null 2>&1; then
-  { yay -Qua 2>/dev/null | grep -vE '^(gcc14|gcc14-libs) ' >"$work/aur"; } &
+  timeout --kill-after=5 "$net_timeout" yay -Qua >"$work/aur.raw" 2>/dev/null &
   aur_pid=$!
 else
   note "yay is not installed, AUR updates were not checked"
 fi
-if command -v mise >/dev/null 2>&1; then
-  # A tool that is declared but not installed shows "[MISSING]" as its current
-  # version. It has nothing to update, so the one filter here drops it for
-  # both the summary count and the report.
-  { MISE_MINIMUM_RELEASE_AGE=0 mise outdated --no-header 2>/dev/null | grep -vF '[MISSING]' >"$work/mise"; } &
+if [[ $skip_mise == true ]]; then
+  :
+elif command -v mise >/dev/null 2>&1; then
+  MISE_MINIMUM_RELEASE_AGE=0 timeout --kill-after=5 "$net_timeout" mise outdated --no-header \
+    >"$work/mise.raw" 2>/dev/null &
   mise_pid=$!
 else
   note "mise is not installed, tool updates were not checked"
 fi
+timed_out() { (( $1 == 124 || $1 == 137 )); }
 wait_background() {
-  [[ -n $aur_pid ]] && wait "$aur_pid"
-  [[ -n $mise_pid ]] && wait "$mise_pid"
+  if [[ -n $aur_pid ]]; then
+    wait "$aur_pid"
+    aur_status=$?
+    aur_pid=""
+    head -c 65536 "$work/aur.raw" | grep -vE '^(gcc14|gcc14-libs) ' >"$work/aur"
+    timed_out "$aur_status" && note "The AUR check timed out, so AUR updates may be missing"
+  fi
+  if [[ -n $mise_pid ]]; then
+    wait "$mise_pid"
+    mise_status=$?
+    mise_pid=""
+    # A tool that is declared but not installed shows "[MISSING]" as its current
+    # version. It has nothing to update, so this one filter drops it for both
+    # the summary count and the report.
+    head -c 65536 "$work/mise.raw" | grep -vF '[MISSING]' >"$work/mise"
+    timed_out "$mise_status" && note "The mise check timed out, so tool updates may be missing"
+  fi
   return 0
+}
+
+# Run a tool in the background and wait for it, under timeout. The wait can be
+# interrupted by the trap, and the child never holds the lock descriptor.
+run_fg() {
+  timeout --kill-after=5 "$1" "${@:2}" 9>&- &
+  fg_pid=$!
+  wait "$fg_pid"
+  local rc=$?
+  fg_pid=""
+  return "$rc"
 }
 
 if ! command -v checkupdates >/dev/null 2>&1; then
@@ -104,32 +175,40 @@ fi
 
 # checkupdates and `pacman -Sup` share one sync database and one lock file.
 # Two overlapping runs (ours, or the stock update widget) make the second one
-# fail. So this helper syncs a private database, and a lock under the runtime
-# directory serializes our own runs. Without a runtime directory nothing is
-# created and the tools keep their defaults. The lock descriptor is opened
-# after the background jobs start, so they do not inherit it.
-lock_fd=""
+# fail. So this helper syncs a private database. With a runtime directory, the
+# database lives there and a lock serializes our own runs (descriptor 9, opened
+# after the background jobs start and closed for every child). Without one, the
+# database is a private temporary directory removed at exit. The stock shared
+# path is never used.
 runtime_dir=${XDG_RUNTIME_DIR:-}
-if [[ -n $runtime_dir ]] && command -v flock >/dev/null 2>&1; then
-  state_dir="$runtime_dir/update-explainer"
-  if mkdir -p -m 700 "$state_dir" 2>/dev/null && exec {lock_fd}>"$state_dir/collect.lock" 2>/dev/null; then
-    export CHECKUPDATES_DB="$state_dir/checkup-db/"
-    if ! flock -w "${UPDATE_EXPLAINER_LOCK_WAIT:-120}" "$lock_fd"; then
+state_dir="$runtime_dir/update-explainer"
+if [[ -n $runtime_dir ]] && mkdir -p -m 700 "$state_dir" 2>/dev/null; then
+  export CHECKUPDATES_DB="$state_dir/checkup-db/"
+  if command -v flock >/dev/null 2>&1 && exec 9>"$state_dir/collect.lock" 2>/dev/null; then
+    if ! flock -w "$(seconds_or "${UPDATE_EXPLAINER_LOCK_WAIT:-}" 120)" 9; then
       wait_background
       fail_out "another update check is still running, try again in a moment"
       exit 0
     fi
-  else
-    lock_fd=""
   fi
+else
+  private_db=$(mktemp -d 2>/dev/null) || {
+    wait_background
+    fail_out "cannot create a private folder for the update database"
+    exit 0
+  }
+  export CHECKUPDATES_DB="$private_db/db/"
 fi
-release_lock() {
-  [[ -n $lock_fd ]] && exec {lock_fd}>&-
-  lock_fd=""
-}
+release_lock() { exec 9>&-; }
 
-checkupdates --nocolor >"$work/check-out" 2>"$work/check-err"
+run_fg "$net_timeout" checkupdates --nocolor >"$work/check-out" 2>"$work/check-err"
 check_status=$?
+if timed_out "$check_status"; then
+  release_lock
+  wait_background
+  fail_out "checkupdates timed out, check your network and try again"
+  exit 0
+fi
 if (( check_status == 1 )); then
   release_lock
   wait_background
@@ -146,9 +225,9 @@ read_transaction() {
   if (( check_status == 0 )); then
     transaction_ok=false
     if command -v fakeroot >/dev/null 2>&1; then
-      db="${CHECKUPDATES_DB:-${TMPDIR:-/tmp}/checkup-db-${UID}/}"
-      if fakeroot -- pacman -Sup --disable-sandbox-filesystem --dbpath "$db" --logfile /dev/null \
-        --print-format '%n %v %r %s' 2>/dev/null >"$work/transaction"; then
+      if run_fg "$net_timeout" fakeroot -- pacman -Sup --disable-sandbox-filesystem \
+        --dbpath "$CHECKUPDATES_DB" --logfile /dev/null \
+        --print-format '%n %v %r %s' >"$work/transaction" 2>/dev/null; then
         transaction_ok=true
       fi
     fi
@@ -227,11 +306,16 @@ if [[ -n $omarchy_pkg ]]; then
 fi
 
 # Reboot rules of `omarchy update`: a kernel, hyprland, or an nvidia driver.
+# Only a package whose name can ship a kernel gets the (slow) file list check.
+kernel_candidate() { [[ $1 == linux* || $1 == *kernel* ]]; }
 reboot=false
+kernel_pkgs=()
 while read -r name _; do
   [[ -n $name ]] || continue
-  if pacman -Qlq "$name" 2>/dev/null | grep -q '/vmlinuz$'; then
+  if kernel_candidate "$name" &&
+    timeout --kill-after=5 "$check_timeout" pacman -Qlq "$name" 2>/dev/null | grep -q '/vmlinuz$'; then
     reboot=true
+    kernel_pkgs+=("$name")
   fi
   case $name in
     hyprland | nvidia*) reboot=true ;;
@@ -279,14 +363,19 @@ report_machine() {
 }
 
 report_pacman() {
-  local name new repo size old desc total=0
+  local name new repo size old desc total=0 line n v
+  local names=()
+  declare -A oldv=() descv=()
+  while read -r name _; do [[ -n $name ]] && names+=("$name"); done <"$work/transaction"
+  if (( ${#names[@]} > 0 )) && command -v expac >/dev/null 2>&1; then
+    while IFS=$'\t' read -r n v; do oldv[$n]=$v; done < <(expac -Q '%n\t%v' "${names[@]}" 2>/dev/null)
+    while IFS=$'\t' read -r n v; do descv[$n]=$v; done < <(expac -S '%n\t%d' "${names[@]}" 2>/dev/null)
+  fi
   while read -r name new repo size; do
     [[ -n $name ]] || continue
     total=$((total + size))
-    old=""
-    command -v expac >/dev/null 2>&1 && old=$(expac -Q '%v' "$name" 2>/dev/null | head -1)
-    desc=""
-    command -v expac >/dev/null 2>&1 && desc=$(expac -S '%d' "$name" 2>/dev/null)
+    old=${oldv[$name]:-}
+    desc=${descv[$name]:-}
     printf '%s %s -> %s [%s] %s MiB | %s\n' "$name" "${old:-NEW}" "$new" "$repo" \
       "$((size / 1048576))" "$desc"
   done <"$work/transaction"
@@ -319,25 +408,33 @@ report_omarchy() {
   fi
 }
 
-report_local_edits() {
+# The slow file check runs in the main shell (not in a pipeline) so the cleanup
+# trap can stop it.
+collect_local_edits() {
   local names=() name
+  : >"$work/modified"
+  qkk_status=0
   while read -r name _; do [[ -n $name ]] && names+=("$name"); done <"$work/transaction"
-  if (( ${#names[@]} > 0 )); then
-    pacman -Qkk "${names[@]}" 2>&1 |
-      grep -E '(checksum|Size) mismatch' | grep -oE '^warning: [^:]+: /[^ ]+' |
-      awk '{print $2, $3}' | sort -u >"$work/modified"
-  else
-    : >"$work/modified"
-  fi
-  if [[ -s $work/modified ]]; then
+  (( ${#names[@]} > 0 )) || return 0
+  run_fg "$check_timeout" pacman -Qkk "${names[@]}" >"$work/qkk" 2>&1
+  qkk_status=$?
+  timed_out "$qkk_status" && return 0
+  head -c 1048576 "$work/qkk" |
+    grep -E '(checksum|Size) mismatch' | grep -oE '^warning: [^:]+: /[^ ]+' |
+    awk '{print $2, $3}' | sort -u >"$work/modified"
+}
+
+report_local_edits() {
+  if timed_out "$qkk_status"; then
+    echo "(file check timed out)"
+  elif [[ -s $work/modified ]]; then
     cat "$work/modified"
-    echo "pacman hooks that may patch these back (Target -> Exec):"
-    local hook target exec_line
-    for hook in /etc/pacman.d/hooks/*.hook; do
+    echo "pacman hooks that may patch these back (file name and Target):"
+    local hook target hooks_dir=${UPDATE_EXPLAINER_HOOKS_DIR:-/etc/pacman.d/hooks}
+    for hook in "$hooks_dir"/*.hook; do
       [[ -e $hook ]] || continue
       target=$(grep -m1 -E '^Target' "$hook" | sed 's/^Target *= *//')
-      exec_line=$(grep -m1 -E '^Exec' "$hook" | sed 's/^Exec *= *//')
-      echo "  $(basename "$hook"): $target -> $exec_line"
+      echo "  $(basename "$hook"): $target"
     done
   else
     echo "(none)"
@@ -362,11 +459,11 @@ report_file_or_none() {
 
 report_reboot() {
   local name found=false
+  for name in "${kernel_pkgs[@]}"; do
+    echo "kernel: $name (omarchy update asks to reboot)"; found=true
+  done
   while read -r name _; do
     [[ -n $name ]] || continue
-    if pacman -Qlq "$name" 2>/dev/null | grep -q '/vmlinuz$'; then
-      echo "kernel: $name (omarchy update asks to reboot)"; found=true
-    fi
     case $name in
       hyprland) echo "hyprland (omarchy update asks to reboot)"; found=true ;;
       nvidia*) echo "$name (reboot needed, driver and kernel module must match)"; found=true ;;
@@ -375,9 +472,14 @@ report_reboot() {
   [[ $found == true ]] || echo "(no reboot expected; the shell restarts at the end of every update)"
 }
 
+report_cap=262144
+
 write_report() {
+  collect_local_edits
   # Tool, current and latest only: the config path adds nothing and can hold a user name.
   awk 'NF >= 4 { print $1, $3, $4 }' "$work/mise" >"$work/mise.report"
+  # One AUR line is at most 120 characters: the maintainer controls its text.
+  cut -c1-120 "$work/aur" >"$work/aur.report"
   {
     report_machine | section "This machine"
     report_pacman | section "Pacman packages"
@@ -386,9 +488,14 @@ write_report() {
     report_migrations | section "Pending migrations"
     report_orphans | section "Orphans"
     report_file_or_none "$work/mise.report" | section "Mise"
-    report_file_or_none "$work/aur" | section "AUR"
+    report_file_or_none "$work/aur.report" | section "AUR"
     report_reboot | section "Reboot hints"
   } >"$tmp_report"
+  if (( $(stat -c %s "$tmp_report") > report_cap )); then
+    head -c "$report_cap" "$tmp_report" >"$work/cut"
+    printf '\n[truncated: the report was cut at 256 KiB]\n' >>"$work/cut"
+    cat "$work/cut" >"$tmp_report"
+  fi
 }
 
 if [[ $mode == --report ]]; then

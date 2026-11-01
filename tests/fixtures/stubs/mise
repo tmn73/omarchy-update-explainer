@@ -1,3 +1,6 @@
 #!/usr/bin/env bash
+# Stub: STUB_MISE rows. STUB_MISE_HANG sleeps. STUB_MISE_LOG records each call.
+[[ -n ${STUB_MISE_LOG:-} ]] && echo "called" >>"$STUB_MISE_LOG"
+if [[ -n ${STUB_MISE_HANG:-} ]]; then echo $$ >>"${STUB_PIDFILE:-/dev/null}"; exec sleep 60; fi
 [[ -n ${STUB_MISE:-} ]] && printf '%s\n' "$STUB_MISE"
 exit 0

@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Stub: only "-Qlq <name>" is used. STUB_KERNEL_PKG names the package that ships /vmlinuz.
+# Stub: "-Qlq <name>" (STUB_KERNEL_PKG ships /vmlinuz, calls go to STUB_PACMAN_LOG),
+# "-Q omarchy" (STUB_OMARCHY_Q), "-Qkk" (STUB_QKK output, STUB_QKK_HANG sleeps).
 if [[ $1 == -Qlq ]]; then
+  [[ -n ${STUB_PACMAN_LOG:-} ]] && echo "Qlq $2" >>"$STUB_PACMAN_LOG"
   [[ $2 == "${STUB_KERNEL_PKG:-}" ]] && echo /usr/lib/modules/6.1/vmlinuz && echo /boot/vmlinuz
   echo "/usr/share/doc/$2/README"
+fi
+if [[ $1 == -Qkk ]]; then
+  [[ -n ${STUB_QKK_HANG:-} ]] && exec sleep 60
+  [[ -n ${STUB_QKK:-} ]] && printf '%s\n' "$STUB_QKK"
 fi
 if [[ $1 == -Q && $2 == omarchy && -n ${STUB_OMARCHY_Q:-} ]]; then echo "omarchy $STUB_OMARCHY_Q"; fi
 exit 0

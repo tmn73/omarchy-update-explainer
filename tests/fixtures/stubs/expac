@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 # Stub: STUB_OLD_VERSIONS="name=ver name=ver", STUB_DESC for descriptions.
-if [[ $1 == -Q ]]; then
-  for pair in ${STUB_OLD_VERSIONS:-}; do
-    [[ ${pair%%=*} == "$3" ]] && echo "${pair#*=}"
+# Formats: %v or %d (one name), %n\t%v or %n\t%d (any number of names).
+mode=$1 fmt=$2
+shift 2
+if [[ $mode == -Q ]]; then
+  for name; do
+    for pair in ${STUB_OLD_VERSIONS:-}; do
+      if [[ ${pair%%=*} == "$name" ]]; then
+        if [[ $fmt == '%v' ]]; then echo "${pair#*=}"; else printf '%s\t%s\n' "$name" "${pair#*=}"; fi
+      fi
+    done
   done
-elif [[ $1 == -S ]]; then
-  printf '%s\n' "${STUB_DESC:-A package}"
+elif [[ $mode == -S ]]; then
+  for name; do
+    if [[ $fmt == '%d' ]]; then echo "${STUB_DESC:-A package}"; else printf '%s\t%s\n' "$name" "${STUB_DESC:-A package}"; fi
+  done
 fi
 exit 0

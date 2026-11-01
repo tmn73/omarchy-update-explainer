@@ -3,6 +3,7 @@
 # STUB_CHECK_LOCKDIR emulates the one shared pacman lock of the real tool: a
 # second overlapping run fails with exit 1, as "Cannot fetch updates" does.
 # STUB_CHECK_DBLOG receives the CHECKUPDATES_DB value the run saw.
+if [[ -n ${STUB_CHECK_HANG:-} ]]; then echo $$ >>"${STUB_PIDFILE:-/dev/null}"; exec sleep 60; fi
 [[ -n ${STUB_CHECK_DBLOG:-} ]] && printf '%s\n' "${CHECKUPDATES_DB:-}" >>"$STUB_CHECK_DBLOG"
 if [[ -n ${STUB_CHECK_LOCKDIR:-} ]]; then
   if ! mkdir "$STUB_CHECK_LOCKDIR/db.lck" 2>/dev/null; then
