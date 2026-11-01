@@ -312,8 +312,12 @@ reboot=false
 kernel_pkgs=()
 while read -r name _; do
   [[ -n $name ]] || continue
+  # The list is read in full before grep looks at it. `grep -q` in a pipe
+  # exits at the first match, and pacman then dies of SIGPIPE, which pipefail
+  # reports as "no kernel here".
   if kernel_candidate "$name" &&
-    timeout --kill-after=5 "$check_timeout" pacman -Qlq "$name" 2>/dev/null | grep -q '/vmlinuz$'; then
+    files=$(timeout --kill-after=5 "$check_timeout" pacman -Qlq "$name" 2>/dev/null) &&
+    grep -q '/vmlinuz$' <<<"$files"; then
     reboot=true
     kernel_pkgs+=("$name")
   fi
