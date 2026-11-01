@@ -6,4 +6,6 @@ for test in ./*-test.sh; do
   echo "== $test"
   bash "$test" || status=1
 done
+echo "== ./model.test.js"
+node --test ./model.test.js || status=1
 exit "$status"
