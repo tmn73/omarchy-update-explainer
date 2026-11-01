@@ -27,7 +27,10 @@
     "defaultSection": "right",
     "defaults": {
       "refreshIntervalSec": 1800,
-      "checkMise": true
+      "checkMise": true,
+      "showOmarchy": true,
+      "showSystem": true,
+      "showTools": true
     },
     "schema": [
       {
@@ -44,6 +47,25 @@
         "type": "boolean",
         "label": "Check dev tool updates (mise)",
         "description": "Runs mise outdated, which may contact the tool sources, including GitHub.",
+        "defaultValue": true
+      },
+      {
+        "key": "showOmarchy",
+        "type": "boolean",
+        "label": "Show the icon for Omarchy updates",
+        "defaultValue": true
+      },
+      {
+        "key": "showSystem",
+        "type": "boolean",
+        "label": "Show the icon for system package updates",
+        "defaultValue": true
+      },
+      {
+        "key": "showTools",
+        "type": "boolean",
+        "label": "Show the icon for AUR and dev tool updates",
+        "description": "When off, only the popup lists them.",
         "defaultValue": true
       }
     ]

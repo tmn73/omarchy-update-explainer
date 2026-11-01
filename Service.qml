@@ -33,6 +33,12 @@ Item {
 
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 1800, 300, 21600)
   readonly property bool checkMise: boolSetting("checkMise", true)
+  // Which update types may show the bar icon. The popup lists all of them.
+  readonly property var barTypes: ({
+    omarchy: boolSetting("showOmarchy", true),
+    system: boolSetting("showSystem", true),
+    tools: boolSetting("showTools", true)
+  })
   // When the last check ended (ms since the epoch). Manual refreshes wait 30 s.
   property real lastRunEndedAt: 0
   property bool summaryTimedOut: false
@@ -56,6 +62,7 @@ Item {
   }
 
   readonly property string status: Model.statusOf(summary, runState)
+  readonly property string barStatus: Model.barStatus(summary, status, barTypes)
   readonly property string tooltip: Model.tooltip(summary, status, message)
 
   // Empty when the session has no runtime directory. Nothing is written then:

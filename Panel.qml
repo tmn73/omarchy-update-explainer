@@ -25,11 +25,16 @@ Panel {
   readonly property bool hasUpdates: Model.hasUpdates(updates.summary)
   readonly property var verdictParts: Model.panelVerdict(updates.summary, updates.status, updates.message)
 
-  // Nerd Font glyphs. Pending and checking use the stock update widget glyph.
-  readonly property var glyphs: ({ current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071" })
+  // Nerd Font glyphs. A pending check shows one per update type (Model.kindOf).
+  readonly property var glyphs: ({
+    current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071",
+    reboot: "\uf01e", omarchy: "\uf0aa", system: "\uf1b2", tools: "\uf121", settings: "\uf013"
+  })
 
+  // True while the popup shows the settings screen.
+  property bool settingsOpen: false
   // Empty slot when up to date. Stays visible while the popup is open.
-  visible: root.opened || Model.barVisible(updates.status, root.hasSummary, updates.lastFailed)
+  visible: root.opened || Model.barVisible(updates.barStatus, root.hasSummary, updates.lastFailed)
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -40,20 +45,19 @@ Panel {
     Qt.callLater(function () { keyCatcher.forceActiveFocus() })
   }
 
-  function ageText() {
-    if (updates.fetchedAt === "") return ""
-    var then = Date.parse(updates.fetchedAt)
-    if (isNaN(then)) return ""
-    var minutes = Math.max(0, Math.round((Date.now() - then) / 60000))
-    return minutes < 1 ? qsTr("checked just now") : qsTr("checked %1 min ago").arg(minutes)
-  }
-
   onOpenedChanged: {
     if (opened) {
+      root.settingsOpen = false
       actions.cursor = -1
       updates.refresh()
       root.refocus()
     }
+  }
+
+  SettingsStore {
+    id: store
+
+    owner: root
   }
 
   Service {
@@ -77,7 +81,7 @@ Panel {
 
     anchors.fill: parent
     bar: root.bar
-    text: root.glyphs[updates.status] || root.glyphs.current
+    text: root.glyphs[Model.iconKey(updates.summary, updates.barStatus, updates.barTypes)] || root.glyphs.current
     active: updates.status === "error"
     opacity: updates.status === "checking" ? 0.5 : 1
     tooltipText: updates.tooltip
@@ -105,7 +109,10 @@ Panel {
       id: keyCatcher
 
       anchors.fill: parent
-      onCloseRequested: root.close()
+      onCloseRequested: {
+        if (root.settingsOpen) root.settingsOpen = false
+        else root.close()
+      }
       onTabRequested: function (direction) { actions.moveFocus(direction) }
       onActivateRequested: actions.activateFocused()
       onTextKey: function (character) {
@@ -119,34 +126,31 @@ Panel {
         width: parent.width
         spacing: Style.space(20)
 
-        Item {
+        PanelHeader {
           width: parent.width
-          height: Math.max(Style.space(28), 28)
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          title: root.settingsOpen ? qsTr("Settings") : qsTr("Updates")
+          fetchedAt: updates.fetchedAt
+          gearGlyph: root.glyphs.settings
+          settingsOpen: root.settingsOpen
+          onGearClicked: { root.settingsOpen = !root.settingsOpen; root.refocus() }
+        }
 
-          Text {
-            textFormat: Text.PlainText
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            text: qsTr("Updates")
-            color: root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.title
-            font.bold: true
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.ageText()
-            color: Commons.Color.muted
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
-          }
+        SettingsView {
+          width: parent.width
+          visible: root.settingsOpen
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          showOmarchy: updates.barTypes.omarchy
+          showSystem: updates.barTypes.system
+          showTools: updates.barTypes.tools
+          onToggled: function (key) { store.toggle(key, true) }
         }
 
         VerdictBlock {
           width: parent.width
+          visible: !root.settingsOpen
           title: root.verdictParts.title
           detail: root.verdictParts.detail
           tone: root.verdictParts.tone
@@ -156,7 +160,7 @@ Panel {
         Column {
           width: parent.width
           spacing: Style.space(16)
-          visible: root.hasUpdates
+          visible: root.hasUpdates && !root.settingsOpen
 
           Repeater {
             model: root.hasSummary ? Model.sections(updates.summary) : []
@@ -177,6 +181,7 @@ Panel {
           id: actions
 
           width: parent.width
+          visible: !root.settingsOpen
           agent: updates.agent
           busy: updates.busy
           pending: root.hasUpdates

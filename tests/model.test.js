@@ -464,3 +464,45 @@ test('run deadlines cover the helper worst case', () => {
   assert.ok(Model.SUMMARY_DEADLINE_MS > 300000)
   assert.ok(Model.REPORT_DEADLINE_MS > Model.SUMMARY_DEADLINE_MS)
 })
+
+test('kindOf picks the most urgent type: reboot, omarchy, system, tools', () => {
+  assert.strictEqual(Model.kindOf(summary({ reboot: true })), 'reboot')
+  assert.strictEqual(Model.kindOf(summary()), 'omarchy')
+  const noOmarchy = { omarchy: { pending: false } }
+  assert.strictEqual(Model.kindOf(summary(noOmarchy)), 'system')
+  assert.strictEqual(Model.kindOf(summary(Object.assign({ sources: { pacman: 0, aur: 1, mise: 0 } }, noOmarchy))), 'tools')
+  assert.strictEqual(Model.kindOf(summary(Object.assign({ sources: { pacman: 0, aur: 0, mise: 2 } }, noOmarchy))), 'tools')
+})
+
+test('kindOf is empty without updates', () => {
+  assert.strictEqual(Model.kindOf(null), '')
+  assert.strictEqual(Model.kindOf(summary({ total: 0 })), '')
+})
+
+test('iconKey: checking and error win, pending follows the type', () => {
+  assert.strictEqual(Model.iconKey(summary(), 'error'), 'error')
+  assert.strictEqual(Model.iconKey(null, 'checking'), 'checking')
+  assert.strictEqual(Model.iconKey(summary({ reboot: true }), 'pending'), 'reboot')
+  assert.strictEqual(Model.iconKey(null, 'pending'), 'pending')
+})
+
+test('tooltip adds the reboot hint only when a reboot is needed', () => {
+  assert.doesNotMatch(Model.tooltip(summary(), 'pending', ''), /Reboot/)
+  assert.match(Model.tooltip(summary({ reboot: true }), 'pending', ''), /Reboot needed/)
+})
+
+test('kindOf skips hidden types, and a reboot needs a shown Omarchy or system type', () => {
+  const noOmarchy = { omarchy: { pending: false }, sources: { pacman: 3, aur: 1, mise: 0 } }
+  assert.strictEqual(Model.kindOf(summary(), { omarchy: false }), 'system')
+  assert.strictEqual(Model.kindOf(summary(noOmarchy), { system: false }), 'tools')
+  assert.strictEqual(Model.kindOf(summary(noOmarchy), { system: false, tools: false }), '')
+  assert.strictEqual(Model.kindOf(summary({ reboot: true }), { omarchy: false, system: false }), 'tools')
+  assert.strictEqual(Model.kindOf(summary({ reboot: true }), { omarchy: false }), 'reboot')
+})
+
+test('barStatus hides the bar when no shown type has updates', () => {
+  const only = { omarchy: { pending: false }, sources: { pacman: 0, aur: 2, mise: 0 } }
+  assert.strictEqual(Model.barStatus(summary(only), 'pending', { tools: false }), 'current')
+  assert.strictEqual(Model.barStatus(summary(only), 'pending', {}), 'pending')
+  assert.strictEqual(Model.barStatus(summary(only), 'error', { tools: false }), 'error')
+})

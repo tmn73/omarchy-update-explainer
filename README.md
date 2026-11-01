@@ -170,6 +170,11 @@ Tested with Claude Code on the author's machine (Explain ran end to end). Other 
 | --- | --- | --- |
 | Refresh interval (seconds) | 1800 | 300 to 21600 |
 | Check dev tool updates (mise) | on | on or off |
+| Show the icon for Omarchy updates | on | on or off |
+| Show the icon for system package updates | on | on or off |
+| Show the icon for AUR and dev tool updates | on | on or off |
+
+The three icon settings only decide when the bar icon shows. The popup always lists every update. The icon changes with the most urgent shown type: reboot, Omarchy, system packages, then AUR or dev tools.
 
 ## Local development
 

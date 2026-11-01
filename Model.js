@@ -42,6 +42,40 @@ function pendingNames(summary) {
   return names
 }
 
+// The type of the pending updates, most urgent first: reboot, omarchy, system
+// (pacman without the Omarchy package), tools (AUR or mise). Empty when none.
+// `show` turns types off for the bar: {omarchy, system, tools}, each true by
+// default. A reboot counts only when Omarchy or system updates are shown,
+// because a reboot comes from those packages.
+function kindOf(summary, show) {
+  if (!summary || !(summary.total > 0)) return ""
+  var f = show || {}
+  var o = summary.omarchy || {}
+  var s = summary.sources || {}
+  var system = (s.pacman || 0) - (o.pending ? 1 : 0)
+  var tools = (s.aur || 0) + (s.mise || 0)
+  var hasOmarchy = !!o.pending && f.omarchy !== false
+  var hasSystem = system > 0 && f.system !== false
+  var hasTools = tools > 0 && f.tools !== false
+  if (summary.reboot && (hasOmarchy || hasSystem)) return "reboot"
+  if (hasOmarchy) return "omarchy"
+  if (hasSystem) return "system"
+  return hasTools ? "tools" : ""
+}
+
+// The status the bar item follows. A pending status with nothing in a shown
+// type counts as current, so the item hides. The popup still lists everything.
+function barStatus(summary, status, show) {
+  if (status === "pending" && kindOf(summary, show) === "") return "current"
+  return status
+}
+
+// The key of the bar glyph. Checking and error win over the update type.
+function iconKey(summary, status, show) {
+  if (status !== "pending") return status
+  return kindOf(summary, show) || "pending"
+}
+
 // The bar item shows for pending and error. While checking it shows only
 // before the first summary, so later refreshes stay silent. A retry after a
 // failed check keeps the item visible, so the error icon does not blink.
@@ -56,7 +90,9 @@ function barVisible(status, hasSummary, failedBefore) {
 function tooltip(summary, status, message) {
   if (status === "checking") return "Checking for updates"
   if (status === "error") return message ? message : "The update check failed"
-  if (status === "pending" && summary) return "Updates pending: " + pendingNames(summary).join(", ")
+  if (status === "pending" && summary) {
+    return "Updates pending: " + pendingNames(summary).join(", ") + (summary.reboot ? ". Reboot needed" : "")
+  }
   return "System is up to date"
 }
 
@@ -213,6 +249,9 @@ if (typeof module !== "undefined") {
   module.exports = {
     parseSummary: parseSummary,
     statusOf: statusOf,
+    kindOf: kindOf,
+    barStatus: barStatus,
+    iconKey: iconKey,
     tooltip: tooltip,
     barVisible: barVisible,
     verdict: verdict,
