@@ -78,17 +78,6 @@ Panel {
       else
         root.toggle()
     }
-
-    Rectangle {
-      visible: updates.status === "pending"
-      width: Style.space(6)
-      height: width
-      radius: width / 2
-      color: Commons.Color.accent
-      // Top-right corner of the icon, inside its box, never above it.
-      x: button.width / 2 + button.visualIconSize / 2 - width
-      y: button.height / 2 - button.visualIconSize / 2
-    }
   }
 
   KeyboardPanel {
