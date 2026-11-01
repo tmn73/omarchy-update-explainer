@@ -25,7 +25,7 @@ make_sandbox() {
   rm -rf "$sandbox/bin"
   mkdir -p "$sandbox/bin"
   local tool path
-  for tool in bash cat rm mktemp jq date grep head awk tr sed cut sort wc env dirname; do
+  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname; do
     path=$(command -v "$tool" 2>/dev/null) && ln -sf "$path" "$sandbox/bin/$tool"
   done
   for tool in checkupdates fakeroot pacman expac yay mise; do
@@ -38,11 +38,14 @@ run_case() {
   make_sandbox
   out=$(PATH="$sandbox/bin" "$HELPER" --summary 2>"$sandbox/stderr")
   code=$?
+  if grep -q "command not found" "$sandbox/stderr"; then
+    fail "helper stderr has 'command not found': $(head -c 300 "$sandbox/stderr")"
+  fi
 }
 
 reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
-    STUB_OLD_VERSIONS STUB_DESC STUB_AUR STUB_MISE
+    STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE
 }
 
 summary_ok() {
@@ -121,8 +124,26 @@ summary_hostile_names() {
   assert_jq '.total==1' "$out" "hostile package total"
 }
 
+summary_malformed_line() {
+  reset_env
+  export STUB_TRANSACTION=$'foo 2.0-1 extra 2097152\nbad line'
+  run_case
+  assert_jq '.sources.pacman==1 and .total==1' "$out" "malformed_line count"
+}
+
+summary_transaction_fails() {
+  reset_env
+  export STUB_CHECK_OUT=$'foo 1.0-1 -> 2.0-1\nbar 3-1 -> 4-1'
+  export STUB_FAKEROOT_EXIT=1
+  run_case
+  [[ $code -eq 0 ]] || fail "transaction_fails exit $code"
+  assert_jq '.state=="ok" and .sources.pacman==2 and .total==2' "$out" "transaction_fails count"
+  assert_jq '.downloadMiB==null' "$out" "transaction_fails download"
+  assert_jq '.notes|map(select(contains("transaction")))|length>0' "$out" "transaction_fails note"
+}
+
 for case_name in summary_ok summary_nothing_pending summary_checkupdates_fails \
-  summary_tool_missing summary_reboot_kernel summary_hostile_names; do
+  summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails; do
   before=$failures
   "$case_name"
   (( failures == before )) && echo "ok   $case_name" || echo "FAIL $case_name"

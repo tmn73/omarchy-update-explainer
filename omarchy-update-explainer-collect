@@ -66,7 +66,7 @@ if ! command -v checkupdates >/dev/null 2>&1; then
   exit 0
 fi
 
-checkupdates --nocolor >/dev/null 2>"$work/check-err"
+checkupdates --nocolor >"$work/check-out" 2>"$work/check-err"
 check_status=$?
 if (( check_status == 1 )); then
   wait_background
@@ -76,13 +76,20 @@ if (( check_status == 1 )); then
 fi
 
 : >"$work/transaction"
+transaction_ok=true
 if (( check_status == 0 )); then
+  transaction_ok=false
   if command -v fakeroot >/dev/null 2>&1; then
     db="${CHECKUPDATES_DB:-${TMPDIR:-/tmp}/checkup-db-${UID}/}"
-    fakeroot -- pacman -Sup --disable-sandbox-filesystem --dbpath "$db" --logfile /dev/null \
-      --print-format '%n %v %r %s' 2>/dev/null >"$work/transaction"
-  else
-    note "fakeroot is not installed, the pacman transaction was not read"
+    if fakeroot -- pacman -Sup --disable-sandbox-filesystem --dbpath "$db" --logfile /dev/null \
+      --print-format '%n %v %r %s' 2>/dev/null >"$work/transaction"; then
+      transaction_ok=true
+    fi
+  fi
+  if [[ $transaction_ok == false ]]; then
+    # Fall back to the checkupdates lines ("name old -> new"), so the count stays right.
+    awk 'NF >= 4 && $3 == "->" { print $1, $4, "unknown", 0 }' "$work/check-out" >"$work/transaction"
+    note "The pacman transaction could not be read, so download size and reboot data are unavailable"
   fi
 fi
 
@@ -98,7 +105,7 @@ n_aur=$(grep -c . "$work/aur")
 n_mise=$(grep -c . "$work/mise")
 
 download_mib=null
-if (( n_pacman > 0 )); then
+if (( n_pacman > 0 )) && [[ $transaction_ok == true ]]; then
   total_bytes=$(awk '{ sum += $4 } END { print sum + 0 }' "$work/transaction")
   download_mib=$((total_bytes / 1048576))
 fi
