@@ -63,53 +63,6 @@ test('tooltip covers every status', () => {
   assert.ok(Model.tooltip(null, 'checking').length > 0)
 })
 
-test('verdictLine says "at least 210 MiB" when downloadPartial', () => {
-  assert.match(Model.verdictLine(summary({ downloadPartial: true })), /at least 210 MiB/)
-})
-
-test('verdictLine says "about 210 MiB" when not', () => {
-  assert.match(Model.verdictLine(summary()), /about 210 MiB/)
-})
-
-test('verdictLine omits size when downloadMiB is null', () => {
-  const line = Model.verdictLine(summary({ downloadMiB: null }))
-  assert.doesNotMatch(line, /MiB/)
-  assert.match(line, /15 items/)
-})
-
-test('verdictLine says "No reboot needed." / "Reboot needed."', () => {
-  assert.match(Model.verdictLine(summary()), /No reboot needed\./)
-  assert.match(Model.verdictLine(summary({ reboot: true })), /Reboot needed\./)
-})
-
-test('verdictLine uses the singular for one item', () => {
-  assert.match(Model.verdictLine(summary({ total: 1 })), /1 item\b/)
-})
-
-test('sourceRows shows "4.1-1 to 4.2-1" for the Omarchy row when pending', () => {
-  const rows = Model.sourceRows(summary())
-  assert.deepStrictEqual(rows.map(r => r.id), ['omarchy', 'pacman', 'aur', 'mise'])
-  assert.strictEqual(rows[0].label, 'Omarchy')
-  assert.strictEqual(rows[0].value, '4.1-1 to 4.2-1')
-  assert.strictEqual(rows[1].label, 'System packages')
-  assert.strictEqual(rows[1].value, '12')
-  assert.strictEqual(rows[2].label, 'AUR')
-  assert.strictEqual(rows[3].label, 'Dev tools')
-  assert.strictEqual(rows[3].value, '2')
-})
-
-test('sourceRows shows 0 for Omarchy when not pending', () => {
-  const rows = Model.sourceRows(summary({ omarchy: { pending: false, package: '', from: '', to: '' } }))
-  assert.strictEqual(rows[0].value, '0')
-})
-
-test('explainLabel gives "Explain with Claude Code" for claude and "Choose default agent" for empty', () => {
-  assert.strictEqual(Model.explainLabel('claude'), 'Explain with Claude Code')
-  assert.strictEqual(Model.explainLabel('codex'), 'Explain with Codex')
-  assert.strictEqual(Model.explainLabel(''), 'Choose default agent')
-  assert.strictEqual(Model.explainLabel('mystery'), 'Explain with mystery')
-})
-
 const PATH = '/run/user/1000/update-explainer/report.txt'
 
 test('buildPrompt contains the data path', () => {
@@ -199,30 +152,6 @@ test('tooltip in error shows the helper message, not the old summary message', (
 
 // ---- empty state and the Explain button
 
-test('verdictLine says everything is up to date when total is 0', () => {
-  assert.strictEqual(Model.verdictLine(summary({ total: 0 })), 'Everything is up to date.')
-})
-
-test('explainEnabled: off with nothing pending, off while busy, on otherwise', () => {
-  assert.strictEqual(Model.explainEnabled(summary(), 'claude', false), true)
-  assert.strictEqual(Model.explainEnabled(summary({ total: 0 }), 'claude', false), false)
-  assert.strictEqual(Model.explainEnabled(null, 'claude', false), false)
-  assert.strictEqual(Model.explainEnabled(summary(), 'claude', true), false)
-})
-
-test('explainEnabled: the choose-agent button stays on when no agent is set', () => {
-  assert.strictEqual(Model.explainEnabled(summary({ total: 0 }), '', false), true)
-  assert.strictEqual(Model.explainEnabled(null, '', false), true)
-  assert.strictEqual(Model.explainEnabled(summary(), '', true), false)
-})
-
-test('explainLabel shows a busy label while the report is prepared', () => {
-  assert.strictEqual(Model.explainLabel('claude', true), 'Preparing the report...')
-  assert.strictEqual(Model.explainLabel('', true), 'Preparing the report...')
-})
-
-// ---- prompt guards
-
 function lines(text) { return text.split('\n') }
 
 test('buildPrompt asks for the sources read and the ones that could not be read', () => {
@@ -269,4 +198,112 @@ test('barVisible: hidden when current, shown for pending and error', () => {
 test('barVisible: checking shows only before the first summary', () => {
   assert.strictEqual(Model.barVisible('checking', false), true)
   assert.strictEqual(Model.barVisible('checking', true), false)
+})
+
+// ---- the panel wording: words only, digits only inside data rows
+
+const HAS_DIGIT = /[0-9]/
+
+test('verdict while updates wait: two lines, no digit', () => {
+  const v = Model.verdict(summary())
+  assert.deepStrictEqual(v, { title: 'Updates are waiting', detail: 'No reboot needed.', tone: 'pending' })
+  assert.deepStrictEqual(Model.verdict(summary({ reboot: true })).detail, 'A reboot is needed.')
+  assert.doesNotMatch(JSON.stringify(v), HAS_DIGIT)
+})
+
+test('verdict when up to date', () => {
+  const v = Model.verdict(summary({ total: 0 }))
+  assert.strictEqual(v.title, 'Everything is up to date')
+  assert.strictEqual(v.detail, 'The bar icon stays hidden until something is waiting.')
+  assert.strictEqual(v.tone, 'current')
+  assert.doesNotMatch(JSON.stringify(v), HAS_DIGIT)
+})
+
+test('verdict never mentions a size or a count', () => {
+  const v = Model.verdict(summary({ downloadMiB: 210, downloadPartial: true, total: 99 }))
+  assert.doesNotMatch(v.title + v.detail, /MiB|item|99|210/)
+})
+
+test('explainLabel: one wording for every agent, busy and no agent', () => {
+  assert.strictEqual(Model.explainLabel('claude', false), 'Tell me what changes')
+  assert.strictEqual(Model.explainLabel('mystery', false), 'Tell me what changes')
+  assert.strictEqual(Model.explainLabel('', false), 'Choose an assistant')
+  assert.strictEqual(Model.explainLabel('claude', true), 'Preparing the report...')
+  assert.strictEqual(Model.explainLabel('', true), 'Preparing the report...')
+  for (const a of ['claude', 'codex', '']) {
+    assert.doesNotMatch(Model.explainLabel(a, false) + Model.explainLabel(a, true), HAS_DIGIT)
+  }
+})
+
+test('the module no longer carries agent display names', () => {
+  assert.doesNotMatch(require('node:fs').readFileSync(require.resolve('../Model.js'), 'utf8'), /AGENT_NAMES|Claude Code|Codex/)
+})
+
+test('tooltip text is digit free for every status', () => {
+  assert.doesNotMatch(Model.tooltip(summary(), 'pending'), HAS_DIGIT)
+  assert.doesNotMatch(Model.tooltip(summary({ total: 0 }), 'current'), HAS_DIGIT)
+  assert.doesNotMatch(Model.tooltip(null, 'checking'), HAS_DIGIT)
+  assert.doesNotMatch(Model.tooltip(null, 'error', ''), HAS_DIGIT)
+})
+
+const items = (n, prefix) => Array.from({ length: n }, (_, i) => ({ name: prefix + (i + 1), from: '1.' + i, to: '2.' + i }))
+
+test('parseSummary accepts the old shape without items', () => {
+  assert.strictEqual(Model.parseSummary(JSON.stringify(summary())).ok, true)
+})
+
+test('sections lists only sources that have items, with their labels in capitals', () => {
+  const s = summary({
+    omarchy: { pending: false, package: '', from: '', to: '' },
+    sources: { pacman: 2, aur: 0, mise: 1 },
+    items: { pacman: items(2, 'p'), aur: [], mise: items(1, 'm') }
+  })
+  const secs = Model.sections(s)
+  assert.deepStrictEqual(secs.map(x => x.label), ['SYSTEM PACKAGES', 'DEV TOOLS'])
+  assert.deepStrictEqual(secs[0].rows[0], { name: 'p1', version: '1.0 to 2.0' })
+  assert.strictEqual(secs[0].more, false)
+})
+
+test('sections puts the Omarchy package in its own section, not twice', () => {
+  const s = summary({
+    sources: { pacman: 3, aur: 0, mise: 0 },
+    items: { pacman: [{ name: 'omarchy', from: '4.1-1', to: '4.2-1' }].concat(items(2, 'p')), aur: [], mise: [] }
+  })
+  const secs = Model.sections(s)
+  assert.deepStrictEqual(secs.map(x => x.label), ['OMARCHY', 'SYSTEM PACKAGES'])
+  assert.deepStrictEqual(secs[0].rows, [{ name: 'omarchy', version: '4.1-1 to 4.2-1' }])
+  assert.deepStrictEqual(secs[1].rows.map(r => r.name), ['p1', 'p2'])
+  assert.strictEqual(secs[1].more, false)
+})
+
+test('sections shows at most 4 rows and flags more', () => {
+  const s = summary({
+    omarchy: { pending: false, package: '', from: '', to: '' },
+    sources: { pacman: 9, aur: 0, mise: 0 },
+    items: { pacman: items(5, 'p'), aur: [], mise: [] }
+  })
+  const sec = Model.sections(s)[0]
+  assert.strictEqual(sec.rows.length, 4)
+  assert.strictEqual(sec.more, true)
+})
+
+test('sections survives a summary without items', () => {
+  const s = summary({ omarchy: { pending: false, package: '', from: '', to: '' }, sources: { pacman: 3, aur: 0, mise: 0 } })
+  const secs = Model.sections(s)
+  assert.strictEqual(secs.length, 1)
+  assert.deepStrictEqual(secs[0].rows, [])
+  assert.strictEqual(secs[0].more, true)
+})
+
+test('sections labels and the more flag hold no digit', () => {
+  const secs = Model.sections(summary({ items: { pacman: items(5, 'p'), aur: items(1, 'a'), mise: items(1, 'm') } }))
+  for (const sec of secs) assert.doesNotMatch(sec.label, HAS_DIGIT)
+})
+
+test('panelVerdict: error shows the helper message, checking waits, otherwise the verdict', () => {
+  assert.deepStrictEqual(Model.panelVerdict(summary(), 'error', 'offline'), { title: 'offline', detail: '', tone: 'error' })
+  assert.strictEqual(Model.panelVerdict(null, 'error', '').title, 'The update check failed')
+  assert.strictEqual(Model.panelVerdict(null, 'checking', '').title, 'Checking for updates')
+  assert.strictEqual(Model.panelVerdict(summary(), 'pending', '').title, 'Updates are waiting')
+  assert.doesNotMatch(Model.panelVerdict(null, 'checking', '').title, HAS_DIGIT)
 })

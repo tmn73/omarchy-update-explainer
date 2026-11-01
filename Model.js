@@ -4,33 +4,6 @@
 // Everything here is Qt-free so it can be unit tested under node
 // (tests/model.test.js). The QML side owns rendering and process control.
 
-var AGENT_NAMES = {
-  pi: "Pi",
-  omp: "Oh My Pi",
-  opencode: "OpenCode",
-  ori: "Ori",
-  claude: "Claude Code",
-  codex: "Codex",
-  crush: "Crush",
-  grok: "Grok",
-  openclaw: "OpenClaw",
-  agy: "Antigravity",
-  hermes: "Hermes",
-  copilot: "GitHub Copilot",
-  muse: "Muse Code",
-  "cursor-agent": "Cursor CLI",
-  kimi: "Kimi",
-  qwen: "Qwen Code",
-  dsh: "DeepSeek Harness",
-  mcode: "MiniMax Code",
-  "kiro-cli": "Kiro CLI",
-  freebuff: "Freebuff",
-  kilo: "Kilo",
-  devin: "Devin CLI",
-  amp: "Amp",
-  commandcode: "Command Code"
-}
-
 function parseSummary(raw) {
   var data
   try {
@@ -54,10 +27,6 @@ function statusOf(summary, runState) {
   if (!summary) return runState === "loading" ? "checking" : "current"
   if (summary.state === "error") return "error"
   return summary.total > 0 ? "pending" : "current"
-}
-
-function plural(n, word) {
-  return n + " " + word + (n === 1 ? "" : "s")
 }
 
 // Names of the sources that have items. Words only: the bar never shows a number.
@@ -88,39 +57,68 @@ function tooltip(summary, status, message) {
   return "System is up to date"
 }
 
-function verdictLine(summary) {
-  if (summary.total === 0) return "Everything is up to date."
-  var parts = [plural(summary.total, "item") + " pending"]
-  if (summary.downloadMiB !== null && summary.downloadMiB !== undefined) {
-    parts.push((summary.downloadPartial ? "at least " : "about ") + summary.downloadMiB + " MiB")
+// Two lines in words: what the user should know first, then the reboot hint
+// (or what the empty state means). Never a count and never a size.
+function verdict(summary) {
+  if (summary.total === 0) {
+    return { title: "Everything is up to date",
+             detail: "The bar icon stays hidden until something is waiting.", tone: "current" }
   }
-  var line = parts.join(", ") + "."
-  return line + " " + (summary.reboot ? "Reboot needed." : "No reboot needed.")
+  return { title: "Updates are waiting",
+           detail: summary.reboot ? "A reboot is needed." : "No reboot needed.", tone: "pending" }
 }
 
-function sourceRows(summary) {
+var MAX_ROWS = 4
+
+function versionText(item) {
+  return item.from ? item.from + " to " + item.to : String(item.to || "")
+}
+
+function listOf(summary, key) {
+  var items = summary.items && Array.isArray(summary.items[key]) ? summary.items[key] : []
+  return items.filter(function (item) { return item && typeof item.name === "string" })
+}
+
+// One section for each source that has items, in the order the panel draws
+// them. The Omarchy package gets its own section and is not repeated under
+// system packages. Counts decide only whether "and more" shows; they are
+// never displayed.
+function sections(summary) {
   var o = summary.omarchy || {}
   var s = summary.sources || {}
-  return [
-    { id: "omarchy", label: "Omarchy", value: o.pending ? o.from + " to " + o.to : "0" },
-    { id: "pacman", label: "System packages", value: String(s.pacman || 0) },
-    { id: "aur", label: "AUR", value: String(s.aur || 0) },
-    { id: "mise", label: "Dev tools", value: String(s.mise || 0) }
+  var out = []
+  if (o.pending) {
+    out.push({ id: "omarchy", label: "OMARCHY", more: false,
+               rows: [{ name: o.package || "omarchy", version: versionText({ from: o.from, to: o.to }) }] })
+  }
+  var spec = [
+    { id: "pacman", label: "SYSTEM PACKAGES", count: (s.pacman || 0) - (o.pending ? 1 : 0) },
+    { id: "aur", label: "AUR", count: s.aur || 0 },
+    { id: "mise", label: "DEV TOOLS", count: s.mise || 0 }
   ]
+  spec.forEach(function (src) {
+    if (src.count <= 0) return
+    var rows = listOf(summary, src.id)
+      .filter(function (item) { return !(src.id === "pacman" && o.pending && item.name === o.package) })
+      .slice(0, MAX_ROWS)
+      .map(function (item) { return { name: item.name, version: versionText(item) } })
+    out.push({ id: src.id, label: src.label, rows: rows, more: src.count > rows.length })
+  })
+  return out
 }
 
 function explainLabel(agent, busy) {
   if (busy) return "Preparing the report..."
-  if (!agent) return "Choose default agent"
-  return "Explain with " + (AGENT_NAMES[agent] || agent)
+  return agent ? "Tell me what changes" : "Choose an assistant"
 }
 
-// Explain needs something to explain and no report run in flight. The
-// choose-agent button stays on whenever no agent is set.
-function explainEnabled(summary, agent, busy) {
-  if (busy) return false
-  if (!agent) return true
-  return !!summary && summary.total > 0
+// What the verdict block shows for any status. The tone picks the color.
+function panelVerdict(summary, status, message) {
+  if (status === "error") {
+    return { title: message ? message : "The update check failed", detail: "", tone: "error" }
+  }
+  if (!summary) return { title: "Checking for updates", detail: "", tone: "checking" }
+  return verdict(summary)
 }
 
 // The reducer for a finished refresh. A failed run (error state or garbage)
@@ -163,10 +161,10 @@ if (typeof module !== "undefined") {
     statusOf: statusOf,
     tooltip: tooltip,
     barVisible: barVisible,
-    verdictLine: verdictLine,
-    sourceRows: sourceRows,
+    verdict: verdict,
+    sections: sections,
     explainLabel: explainLabel,
-    explainEnabled: explainEnabled,
+    panelVerdict: panelVerdict,
     nextState: nextState,
     buildPrompt: buildPrompt
   }

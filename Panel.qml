@@ -8,8 +8,9 @@ import "Model.js" as Model
 // Bar entry point for the update explainer.
 //
 // This file owns the bar button and the popup layout. Update data and process
-// control belong to Service.qml, row drawing to SourceList.qml, the buttons to
-// ActionBar.qml, and the wording to Model.js.
+// control belong to Service.qml, source rows to SourceSection.qml, the verdict
+// to VerdictBlock.qml, the buttons to ActionBar.qml, and the wording to
+// Model.js.
 Panel {
   id: root
 
@@ -20,6 +21,7 @@ Panel {
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property bool hasSummary: updates.summary !== null
+  readonly property var verdictParts: Model.panelVerdict(updates.summary, updates.status, updates.message)
 
   // Nerd Font glyphs. Pending and checking use the stock update widget glyph.
   readonly property var glyphs: ({ current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071" })
@@ -135,33 +137,32 @@ Panel {
           }
         }
 
-        Rectangle {
+        VerdictBlock {
           width: parent.width
-          height: verdict.implicitHeight + Style.space(32)
-          radius: Style.space(10)
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
-
-          Text {
-            id: verdict
-
-            textFormat: Text.PlainText
-            anchors.fill: parent
-            anchors.margins: Style.space(16)
-            wrapMode: Text.WordWrap
-            text: root.hasSummary && updates.status !== "error"
-              ? Model.verdictLine(updates.summary)
-              : (updates.message !== "" ? updates.message : updates.tooltip)
-            color: updates.status === "error" ? Commons.Color.urgent : root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-          }
+          title: root.verdictParts.title
+          detail: root.verdictParts.detail
+          tone: root.verdictParts.tone
+          fontFamily: root.fontFamily
         }
 
-        SourceList {
+        Column {
           width: parent.width
-          visible: root.hasSummary
-          rows: root.hasSummary ? Model.sourceRows(updates.summary) : []
-          fontFamily: root.fontFamily
+          spacing: Style.space(16)
+          visible: updates.status === "pending"
+
+          Repeater {
+            model: root.hasSummary ? Model.sections(updates.summary) : []
+
+            delegate: SourceSection {
+              required property var modelData
+
+              width: parent.width
+              label: modelData.label
+              rows: modelData.rows
+              more: modelData.more
+              fontFamily: root.fontFamily
+            }
+          }
         }
 
         ActionBar {
@@ -170,12 +171,13 @@ Panel {
           width: parent.width
           agent: updates.agent
           busy: updates.busy
-          summary: updates.summary
+          pending: updates.status === "pending"
           explainError: updates.explainError
           fontFamily: root.fontFamily
           onExplainRequested: updates.explain()
           onChooseRequested: updates.chooseAgent()
           onUpdateRequested: updates.updateNow()
+          onRefreshRequested: updates.refresh()
         }
       }
     }

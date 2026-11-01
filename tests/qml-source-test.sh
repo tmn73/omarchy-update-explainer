@@ -159,9 +159,9 @@ for file in "$ROOT"/*.qml; do
   done < <(text_block_problems "$file")
 done
 
-# ---- Panel, SourceList and ActionBar
+# ---- Panel and its components
 
-for name in Panel SourceList ActionBar; do
+for name in Panel SourceSection VerdictBlock TintButton ActionBar; do
   [[ -f $ROOT/$name.qml ]] || fail "$name.qml is missing"
 done
 limit() {
@@ -172,7 +172,9 @@ limit() {
   ((lines < max)) || fail "$file has $lines lines, the limit is under $max"
 }
 limit Panel.qml 200
-limit SourceList.qml 120
+limit SourceSection.qml 120
+limit VerdictBlock.qml 120
+limit TintButton.qml 120
 limit ActionBar.qml 120
 
 if [[ -f $ROOT/Panel.qml ]]; then
@@ -180,7 +182,12 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'ipcTarget: "tmn73\.update-explainer"' "Panel.qml has the wrong ipcTarget"
   has Panel.qml 'Service \{' "Panel.qml does not instantiate the Service"
   has Panel.qml 'Accessible\.name' "the bar button has no Accessible.name"
-  has Panel.qml 'Model\.verdictLine' "Panel.qml does not show the verdict line"
+  has Panel.qml 'Model\.panelVerdict' "Panel.qml does not take the verdict from Model.panelVerdict"
+  has Panel.qml 'Model\.sections\(' "Panel.qml does not draw Model.sections"
+  has Panel.qml 'VerdictBlock \{' "Panel.qml does not use VerdictBlock"
+  has Panel.qml 'SourceSection \{' "Panel.qml does not use SourceSection"
+  has Panel.qml 'onRefreshRequested: updates\.refresh\(\)' "Check again does not refresh"
+  hasnt Panel.qml 'Model\.verdictLine|Model\.sourceRows|SourceList' "Panel.qml uses removed names"
   has Panel.qml 'settings: root\.settings' "Panel.qml does not pass settings to the Service"
   hasnt Panel.qml 'omarchy\.system-update' "Panel.qml touches the stock update widget"
   # Bar item: hidden when up to date, never a count, the stock glyph, no dot.
@@ -194,12 +201,26 @@ if [[ -f $ROOT/Panel.qml ]]; then
   hasnt Panel.qml 'Commons\.Color\.accent' "Panel.qml uses the accent color for a dot"
   hasnt Panel.qml 'visualIconSize' "Panel.qml positions something on the icon"
 fi
-if [[ -f $ROOT/SourceList.qml ]]; then
-  has SourceList.qml 'rows' "SourceList.qml takes no rows"
-  has SourceList.qml 'Repeater' "SourceList.qml draws no rows"
+if [[ -f $ROOT/SourceSection.qml ]]; then
+  has SourceSection.qml 'Repeater' "SourceSection.qml draws no rows"
+  has SourceSection.qml 'qsTr\("and more"\)' "SourceSection.qml has no 'and more' row"
+  hasnt SourceSection.qml 'length|count' "SourceSection.qml computes or shows a count"
+fi
+if [[ -f $ROOT/VerdictBlock.qml ]]; then
+  has VerdictBlock.qml 'property string tone' "VerdictBlock.qml has no tone"
+fi
+if [[ -f $ROOT/TintButton.qml ]]; then
+  has TintButton.qml 'Button \{' "TintButton.qml is not a stock Button"
+  has TintButton.qml 'Math\.max\(Style\.space\(48\), 48\)' "TintButton is under 48 px"
+  has TintButton.qml 'Style\.space\(12\)' "TintButton has no radius of 12"
+  hasnt TintButton.qml 'iconText' "TintButton has an icon"
 fi
 if [[ -f $ROOT/ActionBar.qml ]]; then
-  has ActionBar.qml 'Model\.explainEnabled\(' "the primary button is not gated by Model.explainEnabled"
+  has ActionBar.qml 'enabled: !root\.busy' "the primary button is not disabled while busy"
+  has ActionBar.qml 'TintButton \{' "the primary button is not a TintButton"
+  has ActionBar.qml 'qsTr\("Check again"\)' "ActionBar.qml has no Check again button"
+  has ActionBar.qml 'signal refreshRequested' "ActionBar.qml has no refresh signal"
+  hasnt ActionBar.qml 'iconText|caption' "ActionBar.qml has an icon or a caption"
   has ActionBar.qml 'Model\.explainLabel\(root\.agent, root\.busy\)' "the busy label does not reach the button"
   has ActionBar.qml 'property string explainError' "ActionBar.qml cannot show an explain error"
   has ActionBar.qml 'text: root\.explainError' "ActionBar.qml does not show the explain error"
@@ -210,11 +231,10 @@ if [[ -f $ROOT/ActionBar.qml ]]; then
   has ActionBar.qml 'function moveFocus\(' "ActionBar.qml has no moveFocus"
   has ActionBar.qml 'function activateFocused\(' "ActionBar.qml has no activateFocused"
   buttons=$(grep -cE '^  Button \{' "$ROOT/ActionBar.qml" || true)
-  ((buttons == 2)) || fail "ActionBar.qml has $buttons stock Buttons, expected 2"
+  ((buttons == 2)) || fail "ActionBar.qml has $buttons plain Buttons, expected 2"
   focusables=$(grep -cE 'focusable: true' "$ROOT/ActionBar.qml" || true)
-  ((focusables == 2)) || fail "ActionBar.qml has $focusables focusable buttons, expected 2"
+  ((focusables == 2)) || fail "ActionBar.qml has $focusables focusable plain buttons, expected 2"
   hasnt ActionBar.qml 'TapHandler' "ActionBar.qml still uses a TapHandler"
-  has ActionBar.qml 'Math\.max\(Style\.space\(48\), 48\)' "the primary button is under 48 px"
   has ActionBar.qml 'Math\.max\(Style\.space\(44\), 44\)' "Update now is under 44 px"
   grep -c 'Accessible\.name' "$ROOT/ActionBar.qml" | grep -qx 2 || fail "each button needs an Accessible.name"
   has ActionBar.qml 'Model\.explainLabel' "the primary label does not come from Model.explainLabel"
