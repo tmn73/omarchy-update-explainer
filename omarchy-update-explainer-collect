@@ -33,12 +33,15 @@ emit() {
     --argjson download "${download_mib:-null}" \
     --argjson partial "${download_partial:-false}" \
     --argjson reboot "${reboot:-false}" \
+    --argjson ipacman "${items_pacman:-[]}" --argjson iaur "${items_aur:-[]}" \
+    --argjson imise "${items_mise:-[]}" \
     --args '{
       state: $state, message: $message, generatedAt: $generatedAt,
       omarchy: {pending: $pending, package: $package, from: $from, to: $to},
       sources: {pacman: $pacman, aur: $aur, mise: $mise},
       total: ($pacman + $aur + $mise),
       downloadMiB: $download, downloadPartial: $partial,
+      items: {pacman: $ipacman, aur: $iaur, mise: $imise},
       reboot: $reboot, notes: $ARGS.positional
     }' "${notes[@]}"
 }
@@ -174,6 +177,34 @@ if (( n_pacman > 0 )) && [[ $transaction_ok == true ]]; then
 fi
 download_partial=false
 (( n_aur + n_mise > 0 )) && download_partial=true
+
+# The first five items of each source, for the panel. Names and versions reach
+# jq as data on stdin, never through string building.
+declare -A check_old=()
+while read -r cname cold carrow _; do
+  [[ $carrow == "->" ]] && check_old[$cname]=$cold
+done <"$work/check-out"
+
+pacman_items() {
+  local name new old _repo _size
+  while read -r name new _repo _size; do
+    [[ -n $name ]] || continue
+    old=${check_old[$name]:-}
+    if [[ -z $old ]] && command -v expac >/dev/null 2>&1; then
+      old=$(expac -Q '%v' "$name" 2>/dev/null | head -1)
+    fi
+    printf '%s\t%s\t%s\n' "$name" "$old" "$new"
+  done < <(head -5 "$work/transaction")
+}
+
+to_items() {
+  jq -R -s -c 'split("\n") | map(select(length > 0) | split("\t"))
+    | map({name: .[0], from: (.[1] // ""), to: (.[2] // "")})'
+}
+
+items_pacman=$(pacman_items | to_items)
+items_aur=$(awk 'NF >= 4 && $3 == "->" { printf "%s\t%s\t%s\n", $1, $2, $4 }' "$work/aur" | head -5 | to_items)
+items_mise=$(awk 'NF >= 4 { printf "%s\t%s\t%s\n", $1, $3, $4 }' "$work/mise" | head -5 | to_items)
 
 omarchy_pending=false
 omarchy_pkg=""

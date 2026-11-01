@@ -316,7 +316,56 @@ mise_missing_report() {
   return 0
 }
 
-for case_name in mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+items_listed() {
+  reset_env
+  export STUB_CHECK_OUT=$'omarchy 4.1-1 -> 4.2-1\nfoo 1.0-1 -> 2.0-1'
+  export STUB_TRANSACTION=$'omarchy 4.2-1 core 10485760\nfoo 2.0-1 extra 2097152'
+  export STUB_AUR=$'bar 1.0 -> 1.1\nbaz 2 -> 3'
+  export STUB_MISE=$'node  20  20.0.0  22.1.0  /x.toml\nhttp:kiro-cli latest [MISSING] (lazy) 2.37.0 /etc/y.toml\npython 3.12 3.12.1 3.12.4 /x.toml'
+  run_case
+  assert_jq '.items.pacman==[{name:"omarchy",from:"4.1-1",to:"4.2-1"},{name:"foo",from:"1.0-1",to:"2.0-1"}]' "$out" "items_listed pacman"
+  assert_jq '.items.aur==[{name:"bar",from:"1.0",to:"1.1"},{name:"baz",from:"2",to:"3"}]' "$out" "items_listed aur"
+  assert_jq '.items.mise==[{name:"node",from:"20.0.0",to:"22.1.0"},{name:"python",from:"3.12.1",to:"3.12.4"}]' "$out" "items_listed mise"
+  assert_jq '.sources=={pacman:2,aur:2,mise:2} and .total==6' "$out" "items_listed counts kept"
+}
+
+items_cap() {
+  reset_env
+  local lines="" i
+  for i in 1 2 3 4 5 6 7; do lines+="pkg$i 1.$i-1 extra 1048576"$'\n'; done
+  export STUB_TRANSACTION=${lines%$'\n'}
+  export STUB_OLD_VERSIONS="pkg1=0.1-1 pkg2=0.2-1 pkg3=0.3-1 pkg4=0.4-1 pkg5=0.5-1 pkg6=0.6-1 pkg7=0.7-1"
+  run_case
+  assert_jq '.sources.pacman==7 and (.items.pacman|length)==5' "$out" "items_cap"
+  assert_jq '.items.pacman[0]=={name:"pkg1",from:"0.1-1",to:"1.1-1"}' "$out" "items_cap expac old version"
+}
+
+items_hostile() {
+  reset_env
+  export STUB_TRANSACTION='bad"name<img> 1.0-1 core 1048576'
+  export STUB_AUR='$(id) 1 -> 2'
+  run_case
+  jq -e . >/dev/null 2>&1 <<<"$out" || fail "items_hostile: not JSON"
+  assert_jq '.items.pacman[0].name=="bad\"name<img>"' "$out" "items_hostile pacman name"
+  assert_jq '.items.aur[0].name=="$(id)"' "$out" "items_hostile aur name"
+}
+
+items_empty() {
+  reset_env
+  export STUB_CHECK_EXIT=2
+  run_case
+  assert_jq '.items=={pacman:[],aur:[],mise:[]}' "$out" "items_empty"
+}
+
+items_fallback() {
+  reset_env
+  export STUB_CHECK_OUT=$'foo 1.0-1 -> 2.0-1\nbar 3-1 -> 4-1'
+  export STUB_FAKEROOT_EXIT=1
+  run_case
+  assert_jq '.items.pacman==[{name:"foo",from:"1.0-1",to:"2.0-1"},{name:"bar",from:"3-1",to:"4-1"}]' "$out" "items_fallback"
+}
+
+for case_name in items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures
