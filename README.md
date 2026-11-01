@@ -87,6 +87,12 @@ subscription use. The plugin holds no API key and has no provider setting.
 - **Report file.** It lives in `$XDG_RUNTIME_DIR/update-explainer/report.txt`
   with mode 600. The widget removes it when a check finds nothing pending, and
   when the widget closes.
+- **Hardware facts.** The report starts with a "This machine" section: the
+  laptop or board model and vendor, the CPU model, the GPU names, the kernel
+  and Omarchy versions, and the session type. The agent uses it to say whether
+  each change affects you. The section holds model names only: no serial
+  numbers, UUIDs, MAC addresses or hostnames. The report stays on your machine,
+  and only the agent you chose reads it.
 - **No update data in a command line.** The agent gets fixed instructions and
   the path of the report file. The update data stays in the file.
 - **No GitHub call.** The collector runs `checkupdates`, `yay -Qua` and
