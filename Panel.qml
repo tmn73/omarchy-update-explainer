@@ -185,7 +185,7 @@ Panel {
           onExplainRequested: { updates.explain(); root.refocus() }
           onChooseRequested: { updates.chooseAgent(); root.refocus() }
           onUpdateRequested: { updates.updateNow(); root.refocus() }
-          onRefreshRequested: { updates.refresh(); root.refocus() }
+          onRefreshRequested: { updates.refresh(true); root.refocus() }
         }
       }
     }

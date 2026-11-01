@@ -26,7 +26,8 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "refreshIntervalSec": 1800
+      "refreshIntervalSec": 1800,
+      "checkMise": true
     },
     "schema": [
       {
@@ -37,6 +38,13 @@
         "max": 21600,
         "step": 300,
         "defaultValue": 1800
+      },
+      {
+        "key": "checkMise",
+        "type": "boolean",
+        "label": "Check dev tool updates (mise)",
+        "description": "Runs mise outdated, which may contact the tool sources, including GitHub.",
+        "defaultValue": true
       }
     ]
   }

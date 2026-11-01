@@ -64,7 +64,9 @@ if [[ -f $ROOT/Service.qml ]]; then
   ((assigns == 1)) || fail "summary is assigned $assigns times, expected exactly once"
   has $S 'summary = next\.summary' "summary is not taken from the reducer result"
   has $S 'Model\.nextState\(' "apply() does not use Model.nextState"
-  has $S 'if \(next\.removeReport\)' "the report removal does not follow the reducer"
+  hasnt $S 'removeReport' "Service.qml removes the report (an agent session may still read it)"
+  hasnt $S '"rm"' "Service.qml runs rm"
+  hasnt $S 'onDestruction' "Service.qml acts on destruction"
   hasnt $S 'Model\.parseSummary' "Service.qml parses the summary outside the reducer"
 
   # Explain failures reach the user, and explain() waits for a refresh.
@@ -88,14 +90,21 @@ if [[ -f $ROOT/Service.qml ]]; then
   # Report file handling
   has $S 'XDG_RUNTIME_DIR' "the report dir is not under XDG_RUNTIME_DIR"
   has $S '"mkdir", "-p", "-m", "700"' "the report dir is not created with mode 700"
-  # Removal must survive teardown, so it is detached, not a child Process.
-  has $S 'Component\.onDestruction: removeReport\(\)' "destruction does not remove the report"
-  body=$(awk '/function removeReport\(\)/{f=1} f{print} f&&/^  }$/{exit}' "$ROOT/$S")
-  grep -qE 'Quickshell\.execDetached\(\["rm", "-f", reportPath\]\)' <<<"$body" \
-    || fail "removeReport does not use execDetached with rm -f"
   hasnt $S 'cleanupProcess' "the report is removed through a child Process that dies with the item"
-  has $S '"--report"' "explain does not ask for a report"
-  has $S '"--summary"' "refresh does not ask for a summary"
+  has $S 'Model\.helperArgs\("report"' "explain does not ask for a report"
+  has $S 'Model\.helperArgs\("summary"' "refresh does not ask for a summary"
+  has $S 'boolSetting\("checkMise", true\)' "the checkMise setting is not read"
+  has $S 'Model\.refreshAllowed\(' "refresh is not throttled"
+  has $S 'forced === true' "refresh has no forced path"
+  has $S 'onTriggered: root\.refresh\(true\)' "the timer does not force the refresh"
+  # Deadlines: a hung run is stopped and never wedges the widget.
+  has $S 'id: summaryDeadline' "no summary deadline timer"
+  has $S 'id: reportDeadline' "no report deadline timer"
+  has $S 'interval: Model\.SUMMARY_DEADLINE_MS' "the summary deadline is not from Model"
+  has $S 'interval: Model\.REPORT_DEADLINE_MS' "the report deadline is not from Model"
+  has $S 'summaryProcess\.running = false' "the deadline does not stop the summary run"
+  has $S 'reportProcess\.running = false' "the deadline does not stop the report run"
+  has $S 'root\.busy = false' "the deadline does not clear busy"
   has $S 'if \(busy\) return|if \(root\.busy\) return' "a second explain() while busy is not ignored"
 
   # No agent name in the service
@@ -163,7 +172,7 @@ done
 
 # ---- Panel and its components
 
-for name in Panel SourceSection VerdictBlock TintButton ActionBar; do
+for name in Panel SourceSection VerdictBlock TintButton NoteText ActionBar; do
   [[ -f $ROOT/$name.qml ]] || fail "$name.qml is missing"
 done
 limit() {
@@ -177,6 +186,7 @@ limit Panel.qml 200
 limit SourceSection.qml 120
 limit VerdictBlock.qml 120
 limit TintButton.qml 120
+limit NoteText.qml 120
 limit ActionBar.qml 120
 
 if [[ -f $ROOT/Panel.qml ]]; then
@@ -188,7 +198,7 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'Model\.sections\(' "Panel.qml does not draw Model.sections"
   has Panel.qml 'VerdictBlock \{' "Panel.qml does not use VerdictBlock"
   has Panel.qml 'SourceSection \{' "Panel.qml does not use SourceSection"
-  has Panel.qml 'onRefreshRequested: \{ updates\.refresh\(\); root\.refocus\(\) \}' "Check again does not refresh and restore focus"
+  has Panel.qml 'onRefreshRequested: \{ updates\.refresh\(true\); root\.refocus\(\) \}' "Check again does not refresh and restore focus"
   # Every button path hands focus back to the key catcher.
   for handler in onExplainRequested onChooseRequested onUpdateRequested onRefreshRequested; do
     grep -E "$handler:" "$ROOT/Panel.qml" | grep -q 'root\.refocus()' || fail "$handler does not restore focus"
@@ -240,6 +250,8 @@ if [[ -f $ROOT/ActionBar.qml ]]; then
   has ActionBar.qml 'signal refreshRequested' "ActionBar.qml has no refresh signal"
   hasnt ActionBar.qml 'iconText|caption' "ActionBar.qml has an icon or a caption"
   has ActionBar.qml 'Model\.explainLabel\(root\.agent, root\.busy\)' "the busy label does not reach the button"
+  has ActionBar.qml 'Model\.agentNotice\(\)' "ActionBar.qml has no agent notice"
+  has ActionBar.qml 'visible: root\.pending && root\.agent !== "" && !root\.busy' "the notice is not limited to an agent set and not busy"
   has ActionBar.qml 'property string explainError' "ActionBar.qml cannot show an explain error"
   has ActionBar.qml 'text: root\.explainError' "ActionBar.qml does not show the explain error"
   # Keyboard path: the catcher takes Tab, Enter and Space first, so Panel must
@@ -285,6 +297,12 @@ has Service.qml 'interval: root\.refreshIntervalSec' "the Timer interval does no
 has ActionBar.qml 'AgentNotice' "ActionBar.qml does not use AgentNotice"
 has AgentNotice.qml 'No default agent yet' "AgentNotice.qml has no title"
 has AgentNotice.qml 'LineDash|Qt\.DashLine|dash' "AgentNotice.qml has no dashed border"
+
+# ---- The manifest declares the mise switch
+
+jq -e '.barWidget.schema | map(select(.key == "checkMise" and .type == "boolean" and .defaultValue == true)) | length == 1' \
+  "$ROOT/manifest.json" >/dev/null || fail "manifest.json has no boolean checkMise setting that defaults to true"
+jq -e '.barWidget.defaults.checkMise == true' "$ROOT/manifest.json" >/dev/null || fail "manifest.json defaults lack checkMise"
 
 # ---- Result
 

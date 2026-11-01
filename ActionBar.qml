@@ -4,13 +4,10 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// The actions at the bottom of the panel.
-//
-// While updates wait: a soft tinted primary button ("Tell me what changes", or
+// Actions at the bottom of the panel. While updates wait: a soft tinted primary button ("Tell me what changes", or
 // "Choose an assistant" when no default agent is set) and a solid "Update now",
-// compact and side by side on one row. In every other state: one outlined
-// "Check again". Nothing here
-// starts anything on its own: the user clicks. The agent is never named.
+// compact on one row. Otherwise one outlined "Check again". Nothing starts on
+// its own, and the agent is never named.
 Column {
   id: root
 
@@ -19,16 +16,16 @@ Column {
   property bool pending: false
   property string explainError: ""
   property string fontFamily: Style.font.family
-  // Keyboard cursor: -1 none, 0 the first button, 1 the second.
+  // Keyboard cursor: -1 none, then 0 or 1.
   property int cursor: -1
   readonly property int buttonCount: pending ? 2 : 1
-
   signal explainRequested()
   signal chooseRequested()
   signal updateRequested()
   signal refreshRequested()
 
   spacing: Style.space(10)
+
   function firstAction() {
     if (!pending) refreshRequested()
     else if (busy) return
@@ -41,7 +38,6 @@ Column {
     cursor = cursor < 0 ? (direction > 0 ? 0 : n - 1) : (cursor + direction + n) % n
   }
 
-  // Tab moves the cursor; Enter acts on it, or on the first button.
   function activateFocused() {
     if (pending && cursor === 1) updateRequested()
     else firstAction()
@@ -106,14 +102,18 @@ Column {
     }
   }
 
-  Text {
-    textFormat: Text.PlainText
+  NoteText {
+    width: parent.width
+    visible: root.pending && root.agent !== "" && !root.busy
+    text: Model.agentNotice()
+    fontFamily: root.fontFamily
+  }
+
+  NoteText {
     width: parent.width
     visible: root.explainError !== ""
-    wrapMode: Text.WordWrap
     text: root.explainError
     color: Commons.Color.urgent
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.bodySmall
+    fontFamily: root.fontFamily
   }
 }

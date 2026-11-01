@@ -32,10 +32,20 @@ Item {
   property bool busy: false
 
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 1800, 300, 21600)
+  readonly property bool checkMise: boolSetting("checkMise", true)
+  // When the last check ended (ms since the epoch). Manual refreshes wait 30 s.
+  property real lastRunEndedAt: 0
+  property bool summaryTimedOut: false
+  property bool reportTimedOut: false
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
+  }
+
+  function boolSetting(name, fallback) {
+    var value = setting(name, fallback)
+    return value === false || value === "false" ? false : (value === true || value === "true" ? true : fallback)
   }
 
   function intSetting(name, fallback, minimum, maximum) {
@@ -58,11 +68,14 @@ Item {
     return Qt.resolvedUrl("omarchy-update-explainer-collect").toString().replace(/^file:\/\//, "")
   }
 
-  function refresh() {
-    if (!summaryProcess.running) {
+  // `forced` is for the timer and the Check again button. Every other caller
+  // (panel open, R key, clicks, IPC) is ignored within 30 s of the last run.
+  function refresh(forced) {
+    if (Model.refreshAllowed(Date.now(), lastRunEndedAt, forced === true) && !summaryProcess.running) {
       runState = "loading"
-      summaryProcess.command = [helperPath(), "--summary"]
+      summaryProcess.command = [helperPath()].concat(Model.helperArgs("summary", "", checkMise))
       summaryProcess.running = true
+      summaryDeadline.restart()
     }
     if (!agentProcess.running) {
       agentProcess.command = ["omarchy-default-agent"]
@@ -77,15 +90,10 @@ Item {
     runState = next.runState
     message = next.message
     lastFailed = next.runState === "error"
-    if (next.removeReport)
-      removeReport()
   }
 
-  function removeReport() {
-    if (runtimeDir === "") return
-    // Detached so it still runs when this item is being destroyed.
-    Quickshell.execDetached(["rm", "-f", reportPath])
-  }
+  // The report is never removed here: an agent session may still read it. The
+  // next Explain overwrites it, and logout clears the runtime directory.
 
   // Explain waits for a refresh in flight: two checkupdates runs would fight
   // over one database lock. The helper writes into the directory but does not
@@ -108,9 +116,15 @@ Item {
   function startReport() {
     mkdirProcess.command = ["mkdir", "-p", "-m", "700", reportDir]
     mkdirProcess.running = true
+    reportDeadline.restart()
   }
 
   function finishReport(raw) {
+    reportDeadline.stop()
+    if (reportTimedOut) {
+      reportTimedOut = false
+      return
+    }
     var data = null
     try {
       data = JSON.parse(String(raw || ""))
@@ -137,14 +151,41 @@ Item {
 
   visible: false
 
-  Component.onDestruction: removeReport()
-
   Timer {
     interval: root.refreshIntervalSec * 1000
     repeat: true
     running: true
     triggeredOnStart: true
-    onTriggered: root.refresh()
+    onTriggered: root.refresh(true)
+  }
+
+  // Total deadlines: a hung run never wedges the widget for the session.
+  Timer {
+    id: summaryDeadline
+
+    interval: Model.SUMMARY_DEADLINE_MS
+    onTriggered: {
+      if (!summaryProcess.running) return
+      root.summaryTimedOut = true
+      root.runState = "error"
+      root.lastFailed = true
+      root.message = qsTr("The update check took too long and was stopped.")
+      summaryProcess.running = false
+    }
+  }
+
+  Timer {
+    id: reportDeadline
+
+    interval: Model.REPORT_DEADLINE_MS
+    onTriggered: {
+      if (!reportProcess.running && !mkdirProcess.running) return
+      root.reportTimedOut = reportProcess.running
+      mkdirProcess.running = false
+      reportProcess.running = false
+      root.explainError = qsTr("The report took too long and was stopped.")
+      root.busy = false
+    }
   }
 
   Process {
@@ -153,8 +194,12 @@ Item {
     running: false
     command: []
     onExited: function (exitCode) {
+      summaryDeadline.stop()
+      root.lastRunEndedAt = Date.now()
       var output = String(summaryCollector.text || "")
-      if (output.trim() !== "") {
+      if (root.summaryTimedOut) {
+        root.summaryTimedOut = false
+      } else if (output.trim() !== "") {
         root.apply(output)
       } else {
         root.runState = "error"
@@ -207,7 +252,7 @@ Item {
         root.busy = false
         return
       }
-      reportProcess.command = [root.helperPath(), "--report", root.reportPath]
+      reportProcess.command = [root.helperPath()].concat(Model.helperArgs("report", root.reportPath, root.checkMise))
       reportProcess.running = true
     }
   }
