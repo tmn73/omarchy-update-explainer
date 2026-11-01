@@ -13,7 +13,8 @@ data. It says what changes for you and what needs action. You can ask it
 follow-up questions there.
 
 The stock `omarchy.system-update` widget only shows a dot for the Omarchy
-package. This plugin covers more sources, and the two can run side by side.
+package. This plugin covers more sources, so we recommend you remove the stock
+widget (see "Replace the stock update widget" below).
 
 ## Requirements
 
@@ -29,6 +30,34 @@ the primary button offers to choose one instead.
 ```bash
 omarchy plugin add https://github.com/tmn73/omarchy-update-explainer.git --enable
 ```
+
+### Replace the stock update widget
+
+This is a recommendation, not a requirement.
+
+The stock `omarchy.system-update` widget shows an icon only when the Omarchy
+package has an update. This widget also covers system packages, AUR and dev
+tools. It covers Omarchy too, so the stock icon is redundant. If both stay on
+the bar, you can see two icons with the same glyph side by side.
+
+To remove the stock widget:
+
+```bash
+omarchy plugin disable omarchy.system-update
+```
+
+To bring it back:
+
+```bash
+omarchy plugin enable omarchy.system-update
+```
+
+The Omarchy bar README says that `omarchy plugin enable` and
+`omarchy plugin disable` turn widgets on and off, and that ids come from
+`omarchy plugin list`. We did not run these two commands on a built-in widget.
+If one fails, the fallback is to edit the `bar.layout` key of
+`~/.config/omarchy/shell.json`: delete the `{"id": "omarchy.system-update"}`
+entry from the section that holds it, or add it again to bring it back.
 
 ### Update
 
