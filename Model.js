@@ -60,12 +60,31 @@ function plural(n, word) {
   return n + " " + word + (n === 1 ? "" : "s")
 }
 
+// Names of the sources that have items. Words only: the bar never shows a number.
+function pendingNames(summary) {
+  var o = summary.omarchy || {}
+  var s = summary.sources || {}
+  var names = []
+  if (o.pending) names.push("Omarchy")
+  if (s.pacman > 0) names.push("system packages")
+  if (s.aur > 0) names.push("AUR")
+  if (s.mise > 0) names.push("dev tools")
+  return names
+}
+
+// The bar item shows for pending and error. While checking it shows only
+// before the first summary, so later refreshes stay silent.
+function barVisible(status, hasSummary) {
+  if (status === "checking") return !hasSummary
+  return status === "pending" || status === "error"
+}
+
 // `message` is the helper's text for the last run, never one kept from an
 // older good summary.
 function tooltip(summary, status, message) {
   if (status === "checking") return "Checking for updates"
   if (status === "error") return message ? message : "The update check failed"
-  if (status === "pending" && summary) return plural(summary.total, "update") + " pending"
+  if (status === "pending" && summary) return "Updates pending: " + pendingNames(summary).join(", ")
   return "System is up to date"
 }
 
@@ -143,6 +162,7 @@ if (typeof module !== "undefined") {
     parseSummary: parseSummary,
     statusOf: statusOf,
     tooltip: tooltip,
+    barVisible: barVisible,
     verdictLine: verdictLine,
     sourceRows: sourceRows,
     explainLabel: explainLabel,

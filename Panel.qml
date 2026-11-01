@@ -21,8 +21,11 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property bool hasSummary: updates.summary !== null
 
-  // Nerd Font glyphs: quiet check, refresh arrow, spinner, warning.
-  readonly property var glyphs: ({ current: "", pending: "", checking: "", error: "" })
+  // Nerd Font glyphs. Pending and checking use the stock update widget glyph.
+  readonly property var glyphs: ({ current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071" })
+
+  // Empty slot when up to date. Stays visible while the popup is open.
+  visible: root.opened || Model.barVisible(updates.status, root.hasSummary)
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -65,7 +68,6 @@ Panel {
     anchors.fill: parent
     bar: root.bar
     text: root.glyphs[updates.status] || root.glyphs.current
-    labelText: updates.status === "pending" && updates.summary ? String(updates.summary.total) : ""
     active: updates.status === "error"
     opacity: updates.status === "checking" ? 0.5 : 1
     tooltipText: updates.tooltip
@@ -83,9 +85,9 @@ Panel {
       height: width
       radius: width / 2
       color: Commons.Color.accent
-      anchors.top: parent.top
-      anchors.right: parent.right
-      anchors.margins: Style.space(2)
+      // Top-right corner of the icon, inside its box, never above it.
+      x: button.width / 2 + button.visualIconSize / 2 - width
+      y: button.height / 2 - button.visualIconSize / 2
     }
   }
 

@@ -183,6 +183,14 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'Model\.verdictLine' "Panel.qml does not show the verdict line"
   has Panel.qml 'settings: root\.settings' "Panel.qml does not pass settings to the Service"
   hasnt Panel.qml 'omarchy\.system-update' "Panel.qml touches the stock update widget"
+  # Bar item: hidden when up to date, never a count, the stock glyph, a corner dot.
+  has Panel.qml 'visible: root\.opened \|\| Model\.barVisible\(' "the bar item is not hidden by Model.barVisible"
+  hasnt Panel.qml 'labelText' "the bar item shows a count or label"
+  hasnt Panel.qml 'summary\.total' "Panel.qml reads the total for the bar"
+  has Panel.qml 'pending: "\\uf021"' "the pending glyph is not the stock one"
+  has Panel.qml 'checking: "\\uf021"' "the checking glyph is not the stock one"
+  has Panel.qml 'x: button\.width / 2 \+ button\.visualIconSize / 2 - width' "the dot is not on the icon top-right corner"
+  has Panel.qml 'y: button\.height / 2 - button\.visualIconSize / 2' "the dot is not on the icon top edge"
 fi
 if [[ -f $ROOT/SourceList.qml ]]; then
   has SourceList.qml 'rows' "SourceList.qml takes no rows"
