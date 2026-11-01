@@ -55,6 +55,9 @@ Column {
         textFormat: Text.PlainText
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
+        width: Math.min(implicitWidth, row.width * 0.6)
+        elide: Text.ElideMiddle
+        horizontalAlignment: Text.AlignRight
         text: row.modelData.version
         color: Commons.Color.muted
         font.family: root.fontFamily

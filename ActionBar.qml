@@ -7,8 +7,8 @@ import "Model.js" as Model
 // The actions at the bottom of the panel.
 //
 // While updates wait: a soft tinted primary button ("Tell me what changes", or
-// "Choose an assistant" when no default agent is set) above a solid
-// "Update now", both compact on one row. In every other state: one outlined
+// "Choose an assistant" when no default agent is set) and a solid "Update now",
+// compact and side by side on one row. In every other state: one outlined
 // "Check again". Nothing here
 // starts anything on its own: the user clicks. The agent is never named.
 Column {

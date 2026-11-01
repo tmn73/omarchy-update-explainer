@@ -21,16 +21,24 @@ Panel {
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property bool hasSummary: updates.summary !== null
+  // Held data stays valid after a failed refresh, so it keeps showing.
+  readonly property bool hasUpdates: Model.hasUpdates(updates.summary)
   readonly property var verdictParts: Model.panelVerdict(updates.summary, updates.status, updates.message)
 
   // Nerd Font glyphs. Pending and checking use the stock update widget glyph.
   readonly property var glyphs: ({ current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071" })
 
   // Empty slot when up to date. Stays visible while the popup is open.
-  visible: root.opened || Model.barVisible(updates.status, root.hasSummary)
+  visible: root.opened || Model.barVisible(updates.status, root.hasSummary, updates.lastFailed)
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
+
+  // Clicking a button gives it focus, and it may then hide or go disabled, so
+  // Escape, R and Tab would stop working. Hand focus back to the key catcher.
+  function refocus() {
+    Qt.callLater(function () { keyCatcher.forceActiveFocus() })
+  }
 
   function ageText() {
     if (updates.fetchedAt === "") return ""
@@ -44,7 +52,7 @@ Panel {
     if (opened) {
       actions.cursor = -1
       updates.refresh()
-      Qt.callLater(function () { keyCatcher.forceActiveFocus() })
+      root.refocus()
     }
   }
 
@@ -148,7 +156,7 @@ Panel {
         Column {
           width: parent.width
           spacing: Style.space(16)
-          visible: updates.status === "pending"
+          visible: root.hasUpdates
 
           Repeater {
             model: root.hasSummary ? Model.sections(updates.summary) : []
@@ -171,13 +179,13 @@ Panel {
           width: parent.width
           agent: updates.agent
           busy: updates.busy
-          pending: updates.status === "pending"
+          pending: root.hasUpdates
           explainError: updates.explainError
           fontFamily: root.fontFamily
-          onExplainRequested: updates.explain()
-          onChooseRequested: updates.chooseAgent()
-          onUpdateRequested: updates.updateNow()
-          onRefreshRequested: updates.refresh()
+          onExplainRequested: { updates.explain(); root.refocus() }
+          onChooseRequested: { updates.chooseAgent(); root.refocus() }
+          onUpdateRequested: { updates.updateNow(); root.refocus() }
+          onRefreshRequested: { updates.refresh(); root.refocus() }
         }
       }
     }

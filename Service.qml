@@ -24,6 +24,9 @@ Item {
   // from `message`, which describes the update check.
   property string explainError: ""
   property bool explainQueued: false
+  // True after a failed check until the next one succeeds. The bar keeps the
+  // error icon on screen during a retry.
+  property bool lastFailed: false
   property string fetchedAt: ""
   property string agent: ""
   property bool busy: false
@@ -73,6 +76,7 @@ Item {
     fetchedAt = next.fetchedAt
     runState = next.runState
     message = next.message
+    lastFailed = next.runState === "error"
     if (next.removeReport)
       removeReport()
   }
@@ -155,10 +159,17 @@ Item {
       } else {
         root.runState = "error"
         root.message = qsTr("The update check produced no output.")
+        root.lastFailed = true
       }
       if (root.explainQueued) {
         root.explainQueued = false
-        root.startReport()
+        var outcome = Model.explainAfterRefresh(root.status)
+        if (outcome.start) {
+          root.startReport()
+        } else {
+          root.explainError = outcome.error
+          root.busy = false
+        }
       }
     }
 

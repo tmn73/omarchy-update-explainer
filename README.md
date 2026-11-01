@@ -123,8 +123,9 @@ subscription use. The plugin holds no API key and has no provider setting.
   `omarchy-launch-floating-terminal-with-presentation omarchy-update`. If that
   launcher returns at once, the widget refreshes on the next timer tick instead
   of when the update ends.
-- **Check again** is the only button when nothing is waiting. It refreshes the
-  check.
+- **Check again** is the only button when nothing is waiting, during the first
+  check, and after an error with no earlier data. It refreshes the check. After
+  an error with earlier data, the panel keeps that data and both buttons.
 
 On a package install, the Omarchy section shows the version change, not a
 commit count.

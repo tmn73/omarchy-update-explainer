@@ -70,6 +70,8 @@ if [[ -f $ROOT/Service.qml ]]; then
   # Explain failures reach the user, and explain() waits for a refresh.
   has $S 'property string explainError' "Service.qml has no explainError"
   has $S 'explainQueued' "explain() does not queue behind a running refresh"
+  has $S 'Model\.explainAfterRefresh\(' "a queued report starts without checking the refresh outcome"
+  has $S 'property bool lastFailed' "Service.qml has no lastFailed"
   has $S 'if \(summaryProcess\.running\)' "explain() does not check the running refresh"
 
   # Argv arrays only: no shell string for the agent or the update
@@ -186,7 +188,19 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'Model\.sections\(' "Panel.qml does not draw Model.sections"
   has Panel.qml 'VerdictBlock \{' "Panel.qml does not use VerdictBlock"
   has Panel.qml 'SourceSection \{' "Panel.qml does not use SourceSection"
-  has Panel.qml 'onRefreshRequested: updates\.refresh\(\)' "Check again does not refresh"
+  has Panel.qml 'onRefreshRequested: \{ updates\.refresh\(\); root\.refocus\(\) \}' "Check again does not refresh and restore focus"
+  # Every button path hands focus back to the key catcher.
+  for handler in onExplainRequested onChooseRequested onUpdateRequested onRefreshRequested; do
+    grep -E "$handler:" "$ROOT/Panel.qml" | grep -q 'root\.refocus()' || fail "$handler does not restore focus"
+  done
+  has Panel.qml 'function refocus\(\)' "Panel.qml has no refocus"
+  has Panel.qml 'keyCatcher\.forceActiveFocus' "refocus does not target the key catcher"
+  # Held data keeps showing after a failed refresh.
+  has Panel.qml 'readonly property bool hasUpdates: Model\.hasUpdates\(updates\.summary\)' "Panel.qml has no hasUpdates"
+  has Panel.qml 'visible: root\.hasUpdates' "the sections hide when the last refresh failed"
+  has Panel.qml 'pending: root\.hasUpdates' "the buttons follow the status, not the held data"
+  hasnt Panel.qml 'status === "pending"' "Panel.qml gates the panel on the pending status"
+  has Panel.qml 'updates\.lastFailed' "the bar does not keep the error icon during a retry"
   hasnt Panel.qml 'Model\.verdictLine|Model\.sourceRows|SourceList' "Panel.qml uses removed names"
   has Panel.qml 'settings: root\.settings' "Panel.qml does not pass settings to the Service"
   hasnt Panel.qml 'omarchy\.system-update' "Panel.qml touches the stock update widget"
@@ -203,6 +217,8 @@ if [[ -f $ROOT/Panel.qml ]]; then
 fi
 if [[ -f $ROOT/SourceSection.qml ]]; then
   has SourceSection.qml 'Repeater' "SourceSection.qml draws no rows"
+  has SourceSection.qml 'elide: Text\.ElideMiddle' "the version text does not elide in the middle"
+  has SourceSection.qml 'row\.width \* 0\.6' "the version text has no width cap"
   has SourceSection.qml 'qsTr\("and more"\)' "SourceSection.qml has no 'and more' row"
   hasnt SourceSection.qml 'length|count' "SourceSection.qml computes or shows a count"
 fi
