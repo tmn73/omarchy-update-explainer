@@ -101,6 +101,59 @@ if [[ -f $ROOT/Service.qml ]]; then
   hasnt $S "/home/|/usr/local/" "Service.qml contains an absolute path"
 fi
 
+# ---- Every Text is plain text (package data is hostile)
+
+for file in "$ROOT"/*.qml; do
+  name=$(basename "$file")
+  total=$(grep -cE '^[[:space:]]*Text \{' "$file" || true)
+  plain=$(grep -cE 'textFormat: Text\.PlainText' "$file" || true)
+  ((total == plain)) || fail "$name has $total Text items and $plain PlainText settings"
+done
+
+# ---- Panel, SourceList and ActionBar
+
+for name in Panel SourceList ActionBar; do
+  [[ -f $ROOT/$name.qml ]] || fail "$name.qml is missing"
+done
+limit() {
+  local file="$1" max="$2"
+  [[ -f $ROOT/$file ]] || return 0
+  local lines
+  lines=$(wc -l <"$ROOT/$file")
+  ((lines < max)) || fail "$file has $lines lines, the limit is under $max"
+}
+limit Panel.qml 200
+limit SourceList.qml 120
+limit ActionBar.qml 120
+
+if [[ -f $ROOT/Panel.qml ]]; then
+  has Panel.qml 'moduleName: "tmn73\.update-explainer"' "Panel.qml has the wrong moduleName"
+  has Panel.qml 'ipcTarget: "tmn73\.update-explainer"' "Panel.qml has the wrong ipcTarget"
+  has Panel.qml 'Service \{' "Panel.qml does not instantiate the Service"
+  has Panel.qml 'Accessible\.name' "the bar button has no Accessible.name"
+  has Panel.qml 'Model\.verdictLine' "Panel.qml does not show the verdict line"
+  hasnt Panel.qml 'omarchy\.system-update' "Panel.qml touches the stock update widget"
+fi
+if [[ -f $ROOT/SourceList.qml ]]; then
+  has SourceList.qml 'rows' "SourceList.qml takes no rows"
+  has SourceList.qml 'Repeater' "SourceList.qml draws no rows"
+fi
+if [[ -f $ROOT/ActionBar.qml ]]; then
+  has ActionBar.qml 'enabled: !root\.busy|enabled: !busy' "the primary button is not disabled while busy"
+  has ActionBar.qml 'Model\.explainLabel' "the primary label does not come from Model.explainLabel"
+  has ActionBar.qml 'chooseRequested' "ActionBar.qml has no choose signal"
+  has ActionBar.qml 'explainRequested' "ActionBar.qml has no explain signal"
+  has ActionBar.qml 'updateRequested' "ActionBar.qml has no update signal"
+  has ActionBar.qml 'Update now' "ActionBar.qml has no Update now button"
+  hasnt ActionBar.qml 'claude|codex' "ActionBar.qml names an agent"
+fi
+for file in "$ROOT"/Panel.qml "$ROOT"/SourceList.qml "$ROOT"/ActionBar.qml; do
+  [[ -f $file ]] || continue
+  name=$(basename "$file")
+  hasnt "$name" '[—–]' "$name has an em or en dash"
+  hasnt "$name" 'Text \{[^}]*text: "[A-Za-z]' "$name has a user string outside qsTr"
+done
+
 # ---- Result
 
 if ((failures > 0)); then
