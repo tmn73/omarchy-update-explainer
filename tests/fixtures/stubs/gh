@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Stub: records any call. The collector must never call it.
+echo "$*" >"${STUB_GH_LOG:-/dev/null}"
+exit 1

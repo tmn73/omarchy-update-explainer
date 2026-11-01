@@ -17,6 +17,7 @@ assert_jq() {
   jq -e "$1" >/dev/null 2>&1 <<<"$2" || fail "$3 (filter: $1)"
 }
 
+MODE_ARGS=(--summary)
 sandbox=$(mktemp -d)
 trap 'rm -rf "$sandbox"' EXIT
 
@@ -25,10 +26,10 @@ make_sandbox() {
   rm -rf "$sandbox/bin"
   mkdir -p "$sandbox/bin"
   local tool path
-  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname; do
+  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls; do
     path=$(command -v "$tool" 2>/dev/null) && ln -sf "$path" "$sandbox/bin/$tool"
   done
-  for tool in checkupdates fakeroot pacman expac yay mise; do
+  for tool in checkupdates fakeroot pacman expac yay mise gh; do
     [[ " ${SKIP:-} " == *" $tool "* ]] || ln -sf "$STUBS/$tool" "$sandbox/bin/$tool"
   done
 }
@@ -36,7 +37,7 @@ make_sandbox() {
 # run_case: sets $out and $code. Env vars set by the caller reach the stubs.
 run_case() {
   make_sandbox
-  out=$(PATH="$sandbox/bin" "$HELPER" --summary 2>"$sandbox/stderr")
+  out=$(PATH="$sandbox/bin" "$HELPER" "${MODE_ARGS[@]}" 2>"$sandbox/stderr")
   code=$?
   if grep -q "command not found" "$sandbox/stderr"; then
     fail "helper stderr has 'command not found': $(head -c 300 "$sandbox/stderr")"
@@ -45,7 +46,8 @@ run_case() {
 
 reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
-    STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE
+    STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG
+  MODE_ARGS=(--summary)
 }
 
 summary_ok() {
@@ -142,8 +144,98 @@ summary_transaction_fails() {
   assert_jq '.notes|map(select(contains("transaction")))|length>0' "$out" "transaction_fails note"
 }
 
+report_env() {
+  reset_env
+  export STUB_TRANSACTION=$'omarchy 4.2-1 core 10485760\nfoo 2.0-1 extra 2097152'
+  export STUB_OLD_VERSIONS="omarchy=4.1-1 foo=1.0-1"
+  export STUB_GH_LOG="$sandbox/gh-called"
+  rm -f "$STUB_GH_LOG"
+  MODE_ARGS=(--report "$sandbox/report.txt")
+  rm -f "$sandbox/report.txt"
+}
+
+HEADINGS=("## Pacman packages" "## Omarchy" "## Local edits the upgrade overwrites" \
+  "## Pending migrations" "## Orphans" "## Mise" "## AUR" "## Reboot hints")
+
+report_sections() {
+  report_env
+  run_case
+  [[ $code -eq 0 ]] || fail "report_sections exit $code"
+  jq -e --arg p "$sandbox/report.txt" '.state=="ok" and .path==$p' >/dev/null 2>&1 <<<"$out" \
+    || fail "report_sections json: $out"
+  local last=0 h line
+  for h in "${HEADINGS[@]}"; do
+    line=$(grep -n -x -F "$h" "$sandbox/report.txt" | head -1 | cut -d: -f1)
+    if [[ -z $line ]] || (( line <= last )); then fail "report_sections heading out of order or missing: $h"; fi
+    last=${line:-$last}
+  done
+  grep -q -x -F "compare basecamp/omarchy v4.1...v4.2" "$sandbox/report.txt" \
+    || fail "report_sections compare line"
+  grep -q -F "foo 1.0-1 -> 2.0-1 [extra] 2 MiB | A package" "$sandbox/report.txt" \
+    || fail "report_sections package line"
+  grep -q -F "TOTAL download: 12 MiB" "$sandbox/report.txt" || fail "report_sections total"
+}
+
+report_mode_600() {
+  report_env
+  run_case
+  [[ $(stat -c %a "$sandbox/report.txt" 2>/dev/null) == 600 ]] || fail "report_mode_600"
+}
+
+report_atomic() {
+  report_env
+  make_sandbox
+  local i
+  for i in 1 2; do
+    PATH="$sandbox/bin" "$HELPER" --report "$sandbox/report.txt" >/dev/null 2>&1 &
+  done
+  wait
+  local h
+  for h in "${HEADINGS[@]}"; do
+    grep -q -x -F "$h" "$sandbox/report.txt" 2>/dev/null || fail "report_atomic missing heading: $h"
+  done
+  compgen -G "$sandbox/*.tmp" >/dev/null && fail "report_atomic left a tmp file"
+  compgen -G "$sandbox/.*.tmp" >/dev/null && fail "report_atomic left a hidden tmp file"
+}
+
+report_no_github() {
+  report_env
+  run_case
+  [[ -e $sandbox/gh-called ]] && fail "report_no_github: gh was called"
+  grep -q -x -F "compare basecamp/omarchy v4.1...v4.2" "$sandbox/report.txt" || fail "report_no_github compare line"
+}
+
+report_hostile_text() {
+  report_env
+  local hostile=$'say "hi" \'quoted\'\nsecond line <img src=x> $(id) `id`'
+  export STUB_DESC="$hostile"
+  run_case
+  [[ $code -eq 0 ]] || fail "report_hostile exit $code"
+  grep -q -F -- "say \"hi\" 'quoted'" "$sandbox/report.txt" || fail "report_hostile first line"
+  grep -q -F -- 'second line <img src=x> $(id) `id`' "$sandbox/report.txt" || fail "report_hostile second line"
+}
+
+report_bad_path() {
+  report_env
+  MODE_ARGS=(--report "$sandbox/missing-dir/report.txt")
+  run_case
+  [[ $code -eq 0 ]] || fail "report_bad_path exit $code"
+  assert_jq '.state=="error" and (.message|length>0)' "$out" "report_bad_path state"
+}
+
+report_fallback_note() {
+  report_env
+  export STUB_CHECK_OUT=$'foo 1.0-1 -> 2.0-1'
+  export STUB_FAKEROOT_EXIT=1
+  run_case
+  [[ $code -eq 0 ]] || fail "report_fallback exit $code"
+  grep -q -F "foo 1.0-1 -> 2.0-1 [unknown]" "$sandbox/report.txt" || fail "report_fallback line"
+  grep -q -i "transaction could not be read" "$sandbox/report.txt" || fail "report_fallback note"
+}
+
 for case_name in summary_ok summary_nothing_pending summary_checkupdates_fails \
-  summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails; do
+  summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
+  report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures
   "$case_name"
   (( failures == before )) && echo "ok   $case_name" || echo "FAIL $case_name"
