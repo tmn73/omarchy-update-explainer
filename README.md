@@ -95,33 +95,50 @@ you click "Tell me what changes", in a terminal you can see. There is no surpris
 subscription use. The plugin holds no API key and has no provider setting.
 
 - **Report file.** It lives in `$XDG_RUNTIME_DIR/update-explainer/report.txt`
-  with mode 600. The widget removes it when a check finds nothing pending, and
-  when the widget closes.
+  with mode 600. The widget never removes it, so an agent session you keep open
+  can still read it. The next "Tell me what changes" overwrites it, and logout
+  clears the runtime directory.
 - **Hardware facts.** The report starts with a "This machine" section: the
   laptop or board model and vendor, the CPU model, the GPU names, the kernel
   and Omarchy versions, and the session type. The agent uses it to say whether
   each change affects you. The section holds model names only: no serial
   numbers, UUIDs, MAC addresses or hostnames. The file stays local (in
-  `$XDG_RUNTIME_DIR`, mode 600, removed when nothing is pending). The agent you
-  chose reads it and sends it to its model provider like any prompt.
+  `$XDG_RUNTIME_DIR`, mode 600, cleared at logout). The agent you chose reads it
+  and sends it to its model provider like any prompt.
+- **What else the report holds.** In order: this machine, the pacman packages
+  to update (with old and new versions and short descriptions), the Omarchy
+  package and its compare line, paths of locally modified package files and the
+  names and targets of the pacman hooks that may patch them back (never the
+  hook commands), pending Omarchy migrations, orphan packages, dev tool updates
+  (tool, current and latest version only), AUR updates (each line cut at 120
+  characters) and reboot hints. The report is cut at 256 KiB.
 - **No update data in a command line.** The agent gets fixed instructions and
   the path of the report file. The update data stays in the file.
-- **No GitHub call.** The collector runs `checkupdates`, `yay -Qua` and
-  `mise outdated`, as `omarchy update` does. The agent looks up commits and pull
-  requests itself.
+- **No GitHub call by the collector itself.** It runs `checkupdates`,
+  `yay -Qua` and `mise outdated`, as `omarchy update` does. `mise outdated` may
+  contact the tool sources, including GitHub, and unauthenticated GitHub limits
+  are small. You can turn the dev tool check off with the "Check dev tool
+  updates (mise)" setting. The agent looks up commits and pull requests itself.
+- **Timeouts.** Every tool the collector runs has a time limit (about a minute
+  for the network tools, a few minutes for the file check of the report), and
+  the widget stops a run that takes too long. A hung mirror cannot freeze the
+  widget. A manual refresh is ignored within 30 seconds of the last check. The
+  timer and "Check again" always run.
 - **No automatic update.** The plugin never runs the update on its own. The
   prompt tells the agent never to run it. That is an instruction, not a
   control: Omarchy starts the agent in its own unattended mode, which may run
   commands without asking you.
-- **The agent reads the web.** To explain Omarchy changes, the agent reads
+- **The agent reads the web.** The panel says so under the buttons. To explain Omarchy changes, the agent reads
   public GitHub pull request pages. The prompt tells it to treat the file and
   every web page as data and not to follow instructions found in them. A
   malicious page could still try to steer an agent that runs without prompts,
   so read what the agent plans to do.
 - **Private package database.** To avoid a clash with the stock update widget,
   the collector syncs its own copy of the pacman database under
-  `$XDG_RUNTIME_DIR/update-explainer` and takes a lock there. It needs the
-  first sync once per login.
+  `$XDG_RUNTIME_DIR/update-explainer` and takes a lock there. The first sync
+  needs the network and uses space under the runtime directory (memory backed)
+  until you log out. Without a runtime directory, a private temporary folder is
+  used and removed at the end of each run.
 
 ## Buttons
 
@@ -142,7 +159,7 @@ commit count.
 
 ## Agents
 
-Tested agents: none yet. The prompt is agent-neutral and only the interactive launch is used, but some agents have limits:
+Tested with Claude Code on the author's machine (Explain ran end to end). Other agents are untested. The prompt is agent-neutral and only the interactive launch is used, but some agents have limits:
 
 - `crush` (`crush run`) and `kimi` (`--prompt`) run one-shot, so the window may close with no follow-up.
 - `dsh` and `freebuff` put the prompt on the clipboard instead of starting a session.
@@ -152,6 +169,7 @@ Tested agents: none yet. The prompt is agent-neutral and only the interactive la
 | Setting | Default | Range |
 | --- | --- | --- |
 | Refresh interval (seconds) | 1800 | 300 to 21600 |
+| Check dev tool updates (mise) | on | on or off |
 
 ## Local development
 
