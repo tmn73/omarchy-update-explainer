@@ -79,7 +79,10 @@ else
   note "yay is not installed, AUR updates were not checked"
 fi
 if command -v mise >/dev/null 2>&1; then
-  MISE_MINIMUM_RELEASE_AGE=0 mise outdated --no-header 2>/dev/null >"$work/mise" &
+  # A tool that is declared but not installed shows "[MISSING]" as its current
+  # version. It has nothing to update, so the one filter here drops it for
+  # both the summary count and the report.
+  { MISE_MINIMUM_RELEASE_AGE=0 mise outdated --no-header 2>/dev/null | grep -vF '[MISSING]' >"$work/mise"; } &
   mise_pid=$!
 else
   note "mise is not installed, tool updates were not checked"

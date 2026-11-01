@@ -295,7 +295,28 @@ lock_overlapping_runs() {
   done
 }
 
-for case_name in report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+MISE_ROWS=$'node                        20.0.0  20.0.0            22.1.0   /home/u/.config/mise/config.toml\nantigravity-cli             latest  [MISSING] (lazy)  1.4.12   /etc/mise/conf.d/omarchy-tools.toml\nnpm:@kilocode/cli           latest  [MISSING] (lazy)  7.8.18   /etc/mise/conf.d/omarchy-tools.toml\npython                      3.12    3.12.1            3.12.4   /home/u/.config/mise/config.toml\nhttp:kiro-cli               latest  [MISSING] (lazy)  2.37.0   /etc/mise/conf.d/omarchy-tools.toml'
+
+mise_missing_summary() {
+  reset_env
+  export STUB_CHECK_EXIT=2 STUB_MISE="$MISE_ROWS"
+  run_case
+  assert_jq '.sources.mise==2 and .total==2' "$out" "mise_missing_summary count"
+}
+
+mise_missing_report() {
+  report_env
+  export STUB_MISE="$MISE_ROWS"
+  run_case
+  local section
+  section=$(awk '/^## Mise$/{f=1;next} /^## /{f=0} f' "$sandbox/report.txt")
+  grep -q '^node ' <<<"$section" || fail "mise_missing_report: node row lost"
+  grep -q '^python ' <<<"$section" || fail "mise_missing_report: python row lost"
+  grep -q 'MISSING' <<<"$section" && fail "mise_missing_report: lists a tool that is not installed"
+  return 0
+}
+
+for case_name in mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures
