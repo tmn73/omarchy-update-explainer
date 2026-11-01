@@ -315,7 +315,7 @@ test('buildPrompt starts with one decision-first bottom line', () => {
 
 test('buildPrompt asks for a per-change verdict on this machine in plain words', () => {
   assert.ok(lines(Model.buildPrompt(PATH)).includes(
-    'For every change, say in one short clause whether it affects this machine. Judge with the "This machine" section of the file, for example the hardware a change is for against the hardware listed there. Use the plain words "Affects you", "Does not affect you" or "Not sure".'))
+    'For every change you list, say in one short clause whether it affects this machine. Judge with the "This machine" section of the file, for example the hardware a change is for against the hardware listed there. Use the plain words "Affects you", "Does not affect you" or "Not sure".'))
 })
 
 test('buildPrompt says what to do when the facts are not enough', () => {
@@ -332,10 +332,74 @@ test('buildPrompt keeps the group limits and the Sources line last in the list',
 
 test('buildPrompt requires a label at the start of every change line', () => {
   assert.ok(lines(Model.buildPrompt(PATH)).includes(
-    'Format rule: every change line starts with exactly one of these three labels, followed by a colon: "Affects you:", "Does not affect you:" or "Not sure:". Write the label first, then the change. Do not put the verdict anywhere else in the line.'))
+    'Format rule: every change line starts with exactly one of these three labels, followed by a colon: "Affects you:", "Does not affect you:" or "Not sure:". Write the label first, then the change. Do not put the label anywhere else in the line.'))
 })
 
 test('buildPrompt gives one example line built on neutral data', () => {
   assert.ok(lines(Model.buildPrompt(PATH)).includes(
     'Example line: - Does not affect you: omarchy-foo 1.0 to 1.1 only changes hardware this machine does not have.'))
+})
+
+test('buildPrompt says heads-up lines need no label', () => {
+  assert.ok(lines(Model.buildPrompt(PATH)).includes('Heads-up lines do not need a label.'))
+})
+
+test('buildPrompt scopes the per-change rule to the changes you list', () => {
+  assert.doesNotMatch(Model.buildPrompt(PATH), /For every change,/)
+  assert.doesNotMatch(Model.buildPrompt(PATH), /verdict anywhere/)
+})
+
+test('tooltip for an Omarchy-only update names only Omarchy', () => {
+  const s = summary({ sources: { pacman: 1, aur: 0, mise: 0 } })
+  assert.strictEqual(Model.tooltip(s, 'pending'), 'Updates pending: Omarchy')
+  const more = summary({ sources: { pacman: 3, aur: 0, mise: 0 } })
+  assert.strictEqual(Model.tooltip(more, 'pending'), 'Updates pending: Omarchy, system packages')
+})
+
+test('barVisible: stays visible while loading after a failed check', () => {
+  assert.strictEqual(Model.barVisible('current', true, true), true)
+  assert.strictEqual(Model.barVisible('current', true, false), false)
+  assert.strictEqual(Model.barVisible('current', true), false)
+})
+
+test('sections boundary: exactly 4 items show no "and more"', () => {
+  const s = summary({
+    omarchy: { pending: false, package: '', from: '', to: '' },
+    sources: { pacman: 4, aur: 0, mise: 0 },
+    items: { pacman: items(4, 'p'), aur: [], mise: [] }
+  })
+  const sec = Model.sections(s)[0]
+  assert.strictEqual(sec.rows.length, 4)
+  assert.strictEqual(sec.more, false)
+})
+
+test('sections boundary: exactly 5 items show 4 rows and "and more"', () => {
+  const s = summary({
+    omarchy: { pending: false, package: '', from: '', to: '' },
+    sources: { pacman: 5, aur: 0, mise: 0 },
+    items: { pacman: items(5, 'p'), aur: [], mise: [] }
+  })
+  const sec = Model.sections(s)[0]
+  assert.strictEqual(sec.rows.length, 4)
+  assert.strictEqual(sec.more, true)
+})
+
+test('hasUpdates: a held summary with items counts even when the last run failed', () => {
+  assert.strictEqual(Model.hasUpdates(summary()), true)
+  assert.strictEqual(Model.hasUpdates(summary({ total: 0 })), false)
+  assert.strictEqual(Model.hasUpdates(null), false)
+  const held = summary({ items: { pacman: items(2, 'p'), aur: [], mise: [] } })
+  assert.strictEqual(Model.panelVerdict(held, 'error', 'offline').tone, 'error')
+  assert.ok(Model.sections(held).length > 0)
+})
+
+test('explainAfterRefresh: a queued report starts only when updates are pending', () => {
+  assert.deepStrictEqual(Model.explainAfterRefresh('pending'), { start: true, error: '' })
+  const none = Model.explainAfterRefresh('current')
+  assert.strictEqual(none.start, false)
+  assert.ok(none.error.length > 0)
+  const failed = Model.explainAfterRefresh('error')
+  assert.strictEqual(failed.start, false)
+  assert.notStrictEqual(failed.error, none.error)
+  assert.doesNotMatch(none.error + failed.error, /[0-9]/)
 })
