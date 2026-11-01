@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stub: classic lspci lines, with a serial-like subline the report must drop.
+printf '00:00.0 Host bridge: Test Bridge (rev 04)\n'
+printf '00:02.0 VGA compatible controller: Test Graphics Arc (rev 08)\n'
+printf '\tSubsystem: Vendor X [1234:5678] Serial: GPU-SERIAL-SENTINEL\n'
+printf '01:00.0 3D controller: Test RTX Mobile [10de:28e0] (rev a1)\n'
+printf '03:00.0 Ethernet controller: Test NIC MAC 00:11:22:33:44:55\n'

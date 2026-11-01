@@ -29,7 +29,7 @@ make_sandbox() {
   for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls mkdir sleep flock rmdir; do
     path=$(command -v "$tool" 2>/dev/null) && ln -sf "$path" "$sandbox/bin/$tool"
   done
-  for tool in checkupdates fakeroot pacman expac yay mise gh; do
+  for tool in checkupdates fakeroot pacman expac yay mise gh lscpu lspci uname; do
     [[ " ${SKIP:-} " == *" $tool "* ]] || ln -sf "$STUBS/$tool" "$sandbox/bin/$tool"
   done
 }
@@ -47,7 +47,8 @@ run_case() {
 reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
     STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
-    STUB_CHECK_LOCKDIR STUB_CHECK_DBLOG STUB_FAKEROOT_LOG
+    STUB_CHECK_LOCKDIR STUB_CHECK_DBLOG STUB_FAKEROOT_LOG \
+    STUB_CPU STUB_KERNEL_RELEASE STUB_OMARCHY_Q UPDATE_EXPLAINER_DMI_DIR XDG_SESSION_TYPE
   export XDG_RUNTIME_DIR="$sandbox/run"
   rm -rf "$sandbox/run"
   MODE_ARGS=(--summary)
@@ -157,7 +158,7 @@ report_env() {
   rm -f "$sandbox/report.txt"
 }
 
-HEADINGS=("## Pacman packages" "## Omarchy" "## Local edits the upgrade overwrites" \
+HEADINGS=("## This machine" "## Pacman packages" "## Omarchy" "## Local edits the upgrade overwrites" \
   "## Pending migrations" "## Orphans" "## Mise" "## AUR" "## Reboot hints")
 
 report_sections() {
@@ -177,6 +178,8 @@ report_sections() {
   grep -q -F "foo 1.0-1 -> 2.0-1 [extra] 2 MiB | A package" "$sandbox/report.txt" \
     || fail "report_sections package line"
   grep -q -F "TOTAL download: 12 MiB" "$sandbox/report.txt" || fail "report_sections total"
+  [[ $(grep -n '^## ' "$sandbox/report.txt" | head -1 | cut -d: -f2) == "## This machine" ]] \
+    || fail "report_sections: This machine is not the first section"
 }
 
 report_mode_600() {
@@ -365,7 +368,74 @@ items_fallback() {
   assert_jq '.items.pacman==[{name:"foo",from:"1.0-1",to:"2.0-1"},{name:"bar",from:"3-1",to:"4-1"}]' "$out" "items_fallback"
 }
 
-for case_name in items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+machine_section() {
+  awk '/^## This machine$/{f=1;next} /^## /{f=0} f' "$sandbox/report.txt"
+}
+
+machine_env() {
+  report_env
+  mkdir -p "$sandbox/dmi"
+  printf 'Test Laptop 16\n' >"$sandbox/dmi/product_name"
+  printf 'TestVendor\n' >"$sandbox/dmi/sys_vendor"
+  printf 'DMI-SERIAL-SENTINEL\n' >"$sandbox/dmi/product_serial"
+  printf 'DMI-UUID-SENTINEL\n' >"$sandbox/dmi/product_uuid"
+  printf 'BOARD-SERIAL-SENTINEL\n' >"$sandbox/dmi/board_serial"
+  export UPDATE_EXPLAINER_DMI_DIR="$sandbox/dmi"
+  export STUB_OMARCHY_Q="4.1-1" XDG_SESSION_TYPE=wayland
+  export HOSTNAME=hostname-sentinel
+}
+
+report_machine_section() {
+  machine_env
+  run_case
+  local sec
+  sec=$(machine_section)
+  local expected=("model: Test Laptop 16" "vendor: TestVendor" "cpu: Test CPU 9000" \
+    "gpu: VGA compatible controller: Test Graphics Arc" "gpu: 3D controller: Test RTX Mobile" \
+    "kernel: 6.9.1-test" "omarchy: omarchy 4.1-1" "session: wayland")
+  local line
+  for line in "${expected[@]}"; do
+    grep -q -x -F "$line" <<<"$sec" || fail "report_machine_section missing line: $line (got: $sec)"
+  done
+  grep -q -i "Ethernet\|Host bridge" <<<"$sec" && fail "report_machine_section lists a non GPU device"
+  return 0
+}
+
+report_machine_no_identifiers() {
+  machine_env
+  run_case
+  local sentinel
+  for sentinel in SERIAL-SENTINEL UUID-SENTINEL hostname-sentinel 00:11:22:33:44:55; do
+    grep -q -F -- "$sentinel" "$sandbox/report.txt" && fail "report_machine_no_identifiers: report holds $sentinel"
+  done
+  return 0
+}
+
+report_machine_unknown() {
+  machine_env
+  export UPDATE_EXPLAINER_DMI_DIR="$sandbox/no-such-dir"
+  unset STUB_OMARCHY_Q XDG_SESSION_TYPE
+  SKIP="lscpu lspci" run_case
+  local sec
+  sec=$(machine_section)
+  local key
+  for key in model vendor cpu gpu omarchy session; do
+    grep -q -x -F "$key: unknown" <<<"$sec" || fail "report_machine_unknown: $key is not unknown (got: $sec)"
+  done
+}
+
+report_small_download() {
+  report_env
+  export STUB_TRANSACTION='tiny 1.0-1 extra 500000'
+  run_case
+  grep -q -x -F "TOTAL download: under 1 MiB" "$sandbox/report.txt" || fail "report_small_download: $(grep TOTAL "$sandbox/report.txt")"
+  report_env
+  export STUB_TRANSACTION='zero 1.0-1 extra 0'
+  run_case
+  grep -q -x -F "TOTAL download: 0 MiB" "$sandbox/report.txt" || fail "report_small_download zero bytes keeps 0 MiB"
+}
+
+for case_name in report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures

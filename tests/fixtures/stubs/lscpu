@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Stub: a model name plus fields the report must never read.
+printf 'Architecture:  x86_64\nModel name:    %s\nSerial:        CPU-SERIAL-SENTINEL\n' "${STUB_CPU:-Test CPU 9000}"

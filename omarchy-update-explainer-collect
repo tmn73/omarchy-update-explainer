@@ -244,6 +244,35 @@ ref_of() {
   fi
 }
 
+# Hardware and system facts that let the agent judge whether a change matters
+# on this machine. Read only. It reads model names and versions only: never a
+# serial number, UUID, MAC address or hostname.
+report_machine() {
+  local dmi=${UPDATE_EXPLAINER_DMI_DIR:-/sys/class/dmi/id} value line
+  value=$(head -n1 "$dmi/product_name" 2>/dev/null)
+  echo "model: ${value:-unknown}"
+  value=$(head -n1 "$dmi/sys_vendor" 2>/dev/null)
+  echo "vendor: ${value:-unknown}"
+  value=""
+  command -v lscpu >/dev/null 2>&1 &&
+    value=$(lscpu 2>/dev/null | awk -F: '/^Model name/ { sub(/^[ \t]+/, "", $2); print $2; exit }')
+  echo "cpu: ${value:-unknown}"
+  local gpus=""
+  command -v lspci >/dev/null 2>&1 &&
+    gpus=$(lspci 2>/dev/null | grep -E '^[^[:space:]]+ (VGA compatible controller|3D controller|Display controller):' |
+      sed -E 's/^[^ ]+ //; s/ \[[0-9a-f]{4}:[0-9a-f]{4}\]//; s/ \(rev [0-9a-f]+\)$//')
+  if [[ -n $gpus ]]; then
+    while IFS= read -r line; do echo "gpu: $line"; done <<<"$gpus"
+  else
+    echo "gpu: unknown"
+  fi
+  value=$(uname -r 2>/dev/null)
+  echo "kernel: ${value:-unknown}"
+  value=$(pacman -Q omarchy 2>/dev/null || pacman -Q omarchy-dev 2>/dev/null)
+  echo "omarchy: ${value:-unknown}"
+  echo "session: ${XDG_SESSION_TYPE:-unknown}"
+}
+
 report_pacman() {
   local name new repo size old desc total=0
   while read -r name new repo size; do
@@ -258,7 +287,11 @@ report_pacman() {
   done <"$work/transaction"
   [[ -s $work/transaction ]] || echo "(none)"
   if [[ $transaction_ok == true ]]; then
-    echo "TOTAL download: $((total / 1048576)) MiB"
+    if (( total > 0 && total < 1048576 )); then
+      echo "TOTAL download: under 1 MiB"
+    else
+      echo "TOTAL download: $((total / 1048576)) MiB"
+    fi
   else
     echo "TOTAL download: unknown"
   fi
@@ -339,6 +372,7 @@ report_reboot() {
 
 write_report() {
   {
+    report_machine | section "This machine"
     report_pacman | section "Pacman packages"
     report_omarchy | section "Omarchy"
     report_local_edits | section "Local edits the upgrade overwrites"

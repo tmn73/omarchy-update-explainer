@@ -4,4 +4,5 @@ if [[ $1 == -Qlq ]]; then
   [[ $2 == "${STUB_KERNEL_PKG:-}" ]] && echo /usr/lib/modules/6.1/vmlinuz && echo /boot/vmlinuz
   echo "/usr/share/doc/$2/README"
 fi
+if [[ $1 == -Q && $2 == omarchy && -n ${STUB_OMARCHY_Q:-} ]]; then echo "omarchy $STUB_OMARCHY_Q"; fi
 exit 0
