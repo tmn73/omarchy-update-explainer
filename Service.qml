@@ -7,8 +7,9 @@ import "Model.js" as Model
 // it, reads the default agent, and exposes one stable model to the panel.
 //
 // The rule that shapes this file: a failed refresh never discards a good
-// summary. `summary` is replaced only when a run comes back ok. Every other
-// outcome updates runState and message and leaves the data alone.
+// summary. Model.nextState decides, and it replaces `summary` only when a run
+// comes back ok. Every other outcome updates runState and message and leaves
+// the data and the report alone.
 //
 // Nothing here builds a shell string. Every process gets an argv array, and
 // the only text that reaches an argument list is the fixed prompt and a path.
@@ -19,6 +20,10 @@ Item {
   property var summary: null
   property string runState: "loading"
   property string message: ""
+  // Why the last Explain click failed. Cleared by the next click. Kept apart
+  // from `message`, which describes the update check.
+  property string explainError: ""
+  property bool explainQueued: false
   property string fetchedAt: ""
   property string agent: ""
   property bool busy: false
@@ -38,7 +43,7 @@ Item {
   }
 
   readonly property string status: Model.statusOf(summary, runState)
-  readonly property string tooltip: Model.tooltip(summary, status)
+  readonly property string tooltip: Model.tooltip(summary, status, message)
 
   // Empty when the session has no runtime directory. Nothing is written then:
   // a fixed path in a shared folder would invite symlink and squatting tricks.
@@ -63,18 +68,13 @@ Item {
   }
 
   function apply(raw) {
-    var parsed = Model.parseSummary(String(raw || ""))
-    if (parsed.ok) {
-      summary = parsed.summary
-      fetchedAt = String(parsed.summary.generatedAt || "")
-      message = String(parsed.summary.message || "")
-      runState = parsed.summary.state === "error" ? "error" : "ok"
-      if (parsed.summary.total === 0)
-        removeReport()
-    } else {
-      runState = "error"
-      message = parsed.message
-    }
+    var next = Model.nextState({ summary: summary, fetchedAt: fetchedAt }, raw)
+    summary = next.summary
+    fetchedAt = next.fetchedAt
+    runState = next.runState
+    message = next.message
+    if (next.removeReport)
+      removeReport()
   }
 
   function removeReport() {
@@ -83,15 +83,25 @@ Item {
     Quickshell.execDetached(["rm", "-f", reportPath])
   }
 
-  // The helper writes into the directory but does not create it, so each
-  // report run starts by making it private to this user.
+  // Explain waits for a refresh in flight: two checkupdates runs would fight
+  // over one database lock. The helper writes into the directory but does not
+  // create it, so each report run starts by making it private to this user.
   function explain() {
+    explainError = ""
     if (busy) return
     if (runtimeDir === "") {
-      message = qsTr("The runtime directory is not available, so the update report cannot be written.")
+      explainError = qsTr("The runtime directory is not available, so the update report cannot be written.")
       return
     }
     busy = true
+    if (summaryProcess.running) {
+      explainQueued = true
+      return
+    }
+    startReport()
+  }
+
+  function startReport() {
     mkdirProcess.command = ["mkdir", "-p", "-m", "700", reportDir]
     mkdirProcess.running = true
   }
@@ -106,7 +116,7 @@ Item {
     if (data && data.state === "ok" && typeof data.path === "string" && data.path !== "") {
       Quickshell.execDetached(["omarchy-agent-prompt", Model.buildPrompt(data.path)])
     } else {
-      message = data && data.message ? String(data.message) : qsTr("The update report could not be written.")
+      explainError = data && data.message ? String(data.message) : qsTr("The update report could not be written.")
     }
     busy = false
   }
@@ -146,6 +156,10 @@ Item {
         root.runState = "error"
         root.message = qsTr("The update check produced no output.")
       }
+      if (root.explainQueued) {
+        root.explainQueued = false
+        root.startReport()
+      }
     }
 
     stdout: StdioCollector {
@@ -178,7 +192,7 @@ Item {
     command: []
     onExited: function (exitCode) {
       if (exitCode !== 0) {
-        root.message = qsTr("The report folder could not be created.")
+        root.explainError = qsTr("The report folder could not be created.")
         root.busy = false
         return
       }
