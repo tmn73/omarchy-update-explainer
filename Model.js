@@ -147,21 +147,45 @@ function panelVerdict(summary, status, message) {
 }
 
 // The reducer for a finished refresh. A failed run (error state or garbage)
-// changes runState and message only: the last good summary, its timestamp and
-// the report stay. Only an ok run replaces the summary.
+// changes runState and message only: the last good summary and its timestamp
+// stay. Only an ok run replaces the summary. The report file is never removed
+// here: an agent session may still read it.
 function nextState(prev, raw) {
   var parsed = parseSummary(String(raw || ""))
   if (!parsed.ok) {
     return { summary: prev.summary, fetchedAt: prev.fetchedAt, runState: "error",
-             message: parsed.message, removeReport: false }
+             message: parsed.message }
   }
   if (parsed.summary.state === "error") {
     return { summary: prev.summary, fetchedAt: prev.fetchedAt, runState: "error",
-             message: String(parsed.summary.message || ""), removeReport: false }
+             message: String(parsed.summary.message || "") }
   }
   return { summary: parsed.summary, fetchedAt: String(parsed.summary.generatedAt || ""),
-           runState: "ok", message: String(parsed.summary.message || ""),
-           removeReport: parsed.summary.total === 0 }
+           runState: "ok", message: String(parsed.summary.message || "") }
+}
+
+// Run limits, a little above the worst case of the helper's own timeouts.
+var SUMMARY_DEADLINE_MS = 330000
+var REPORT_DEADLINE_MS = 540000
+var REFRESH_MIN_GAP_MS = 30000
+
+// Manual refreshes (panel open, R key, click) wait 30 seconds after the last
+// run. The timer and the Check again button are forced.
+function refreshAllowed(nowMs, lastEndMs, forced) {
+  if (forced || !lastEndMs) return true
+  return nowMs - lastEndMs >= REFRESH_MIN_GAP_MS
+}
+
+// Arguments for the helper. The mise switch becomes a flag.
+function helperArgs(mode, reportPath, checkMise) {
+  var args = mode === "report" ? ["--report", reportPath] : ["--summary"]
+  if (!checkMise) args.push("--no-mise")
+  return args
+}
+
+// One muted line under the buttons, shown when an agent is set.
+function agentNotice() {
+  return "The assistant reads public GitHub pages to explain Omarchy changes."
 }
 
 function buildPrompt(dataPath) {
@@ -195,6 +219,11 @@ if (typeof module !== "undefined") {
     sections: sections,
     explainLabel: explainLabel,
     panelVerdict: panelVerdict,
+    refreshAllowed: refreshAllowed,
+    helperArgs: helperArgs,
+    agentNotice: agentNotice,
+    SUMMARY_DEADLINE_MS: SUMMARY_DEADLINE_MS,
+    REPORT_DEADLINE_MS: REPORT_DEADLINE_MS,
     hasUpdates: hasUpdates,
     explainAfterRefresh: explainAfterRefresh,
     nextState: nextState,

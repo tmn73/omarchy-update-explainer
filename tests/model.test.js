@@ -101,14 +101,13 @@ const errorRaw = () => JSON.stringify(summary({
   sources: { pacman: 0, aur: 0, mise: 0 }, generatedAt: '2026-11-01T11:00:00Z'
 }))
 
-test('nextState: ok then error keeps the summary, its timestamp and the report', () => {
+test('nextState: ok then error keeps the summary and its timestamp', () => {
   const prev = good()
   const next = Model.nextState(prev, errorRaw())
   assert.strictEqual(next.summary, prev.summary)
   assert.strictEqual(next.fetchedAt, '2026-11-01T10:00:00Z')
   assert.strictEqual(next.runState, 'error')
   assert.strictEqual(next.message, 'checkupdates failed: offline')
-  assert.strictEqual(next.removeReport, false)
 })
 
 test('nextState: error with no earlier summary leaves the summary empty', () => {
@@ -125,23 +124,22 @@ test('nextState: ok replaces the summary and moves the timestamp', () => {
   assert.strictEqual(next.fetchedAt, '2026-11-01T12:00:00Z')
   assert.strictEqual(next.runState, 'ok')
   assert.strictEqual(next.message, '')
-  assert.strictEqual(next.removeReport, false)
 })
 
-test('nextState: ok with total 0 removes the report', () => {
+test('nextState: ok with total 0 replaces the summary and never asks to remove the report', () => {
   const next = Model.nextState(good(), JSON.stringify(summary({ total: 0 })))
   assert.strictEqual(next.runState, 'ok')
-  assert.strictEqual(next.removeReport, true)
+  assert.strictEqual(next.summary.total, 0)
+  assert.strictEqual('removeReport' in next, false)
 })
 
-test('nextState: garbage input keeps the summary and the report', () => {
+test('nextState: garbage input keeps the summary', () => {
   const prev = good()
   const next = Model.nextState(prev, 'not json')
   assert.strictEqual(next.summary, prev.summary)
   assert.strictEqual(next.fetchedAt, prev.fetchedAt)
   assert.strictEqual(next.runState, 'error')
   assert.ok(next.message.length > 0)
-  assert.strictEqual(next.removeReport, false)
 })
 
 test('tooltip in error shows the helper message, not the old summary message', () => {
@@ -438,4 +436,31 @@ test('the version text always contains " to " when both sides are known', () => 
   for (const [a, b] of [['0.30-3', '0.30-4'], ['4.0.0.r1.g7eedd17-1', '4.0.0.r2.g5a4f136-1'], ['1', '2']]) {
     assert.match(oneRow(a, b), / to /)
   }
+})
+
+test('refreshAllowed: forced runs always go, others wait 30 seconds after the last run', () => {
+  assert.strictEqual(Model.refreshAllowed(100000, 0, false), true)
+  assert.strictEqual(Model.refreshAllowed(100000, 90000, false), false)
+  assert.strictEqual(Model.refreshAllowed(100000, 90000, true), true)
+  assert.strictEqual(Model.refreshAllowed(130000, 100000, false), true)
+  assert.strictEqual(Model.refreshAllowed(129999, 100000, false), false)
+})
+
+test('helperArgs: the mise switch becomes a flag, in both modes', () => {
+  assert.deepStrictEqual(Model.helperArgs('summary', '', true), ['--summary'])
+  assert.deepStrictEqual(Model.helperArgs('summary', '', false), ['--summary', '--no-mise'])
+  assert.deepStrictEqual(Model.helperArgs('report', '/r/report.txt', true), ['--report', '/r/report.txt'])
+  assert.deepStrictEqual(Model.helperArgs('report', '/r/report.txt', false), ['--report', '/r/report.txt', '--no-mise'])
+})
+
+test('agentNotice: plain words, no digit, no agent name, no dash', () => {
+  const n = Model.agentNotice()
+  assert.match(n, /public GitHub pages/)
+  assert.doesNotMatch(n, /[0-9]/)
+  assert.doesNotMatch(n, /claude|codex|opencode|[\u2013\u2014-]/i)
+})
+
+test('run deadlines cover the helper worst case', () => {
+  assert.ok(Model.SUMMARY_DEADLINE_MS > 300000)
+  assert.ok(Model.REPORT_DEADLINE_MS > Model.SUMMARY_DEADLINE_MS)
 })
