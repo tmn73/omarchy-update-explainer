@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+[[ -n ${STUB_MISE:-} ]] && printf '%s\n' "$STUB_MISE"
+exit 0

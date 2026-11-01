@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Stub: STUB_OLD_VERSIONS="name=ver name=ver", STUB_DESC for descriptions.
+if [[ $1 == -Q ]]; then
+  for pair in ${STUB_OLD_VERSIONS:-}; do
+    [[ ${pair%%=*} == "$3" ]] && echo "${pair#*=}"
+  done
+elif [[ $1 == -S ]]; then
+  printf '%s\n' "${STUB_DESC:-A package}"
+fi
+exit 0

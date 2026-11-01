@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# Print what `omarchy update` would change right now, as one JSON document.
+# Read only: it never changes the system and makes no call to GitHub.
+# Contract: one JSON document on stdout, exit 0 for every failure the user can meet.
+set -uo pipefail
+
+mode=${1:-}
+if [[ $mode != --summary ]]; then
+  echo "usage: omarchy-update-explainer-collect --summary" >&2
+  exit 2
+fi
+
+work=$(mktemp -d) || exit 1
+trap 'rm -rf "$work"' EXIT
+
+notes=()
+note() { notes+=("$1"); }
+
+emit() {
+  local state=$1 message=$2
+  jq -n \
+    --arg state "$state" --arg message "$message" \
+    --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson pending "${omarchy_pending:-false}" \
+    --arg package "${omarchy_pkg:-}" --arg from "${old_ver:-}" --arg to "${new_ver:-}" \
+    --argjson pacman "${n_pacman:-0}" --argjson aur "${n_aur:-0}" --argjson mise "${n_mise:-0}" \
+    --argjson download "${download_mib:-null}" \
+    --argjson partial "${download_partial:-false}" \
+    --argjson reboot "${reboot:-false}" \
+    --args '{
+      state: $state, message: $message, generatedAt: $generatedAt,
+      omarchy: {pending: $pending, package: $package, from: $from, to: $to},
+      sources: {pacman: $pacman, aur: $aur, mise: $mise},
+      total: ($pacman + $aur + $mise),
+      downloadMiB: $download, downloadPartial: $partial,
+      reboot: $reboot, notes: $ARGS.positional
+    }' "${notes[@]}"
+}
+
+# Slow network calls run in the background while pacman syncs.
+aur_pid=""
+mise_pid=""
+: >"$work/aur"
+: >"$work/mise"
+if command -v yay >/dev/null 2>&1; then
+  { yay -Qua 2>/dev/null | grep -vE '^(gcc14|gcc14-libs) ' >"$work/aur"; } &
+  aur_pid=$!
+else
+  note "yay is not installed, AUR updates were not checked"
+fi
+if command -v mise >/dev/null 2>&1; then
+  MISE_MINIMUM_RELEASE_AGE=0 mise outdated --no-header 2>/dev/null >"$work/mise" &
+  mise_pid=$!
+else
+  note "mise is not installed, tool updates were not checked"
+fi
+wait_background() {
+  [[ -n $aur_pid ]] && wait "$aur_pid"
+  [[ -n $mise_pid ]] && wait "$mise_pid"
+  return 0
+}
+
+if ! command -v checkupdates >/dev/null 2>&1; then
+  wait_background
+  emit error "checkupdates is not installed (package pacman-contrib)"
+  exit 0
+fi
+
+checkupdates --nocolor >/dev/null 2>"$work/check-err"
+check_status=$?
+if (( check_status == 1 )); then
+  wait_background
+  err=$(head -c 2000 "$work/check-err")
+  emit error "checkupdates failed: ${err:-no error text}"
+  exit 0
+fi
+
+: >"$work/transaction"
+if (( check_status == 0 )); then
+  if command -v fakeroot >/dev/null 2>&1; then
+    db="${CHECKUPDATES_DB:-${TMPDIR:-/tmp}/checkup-db-${UID}/}"
+    fakeroot -- pacman -Sup --disable-sandbox-filesystem --dbpath "$db" --logfile /dev/null \
+      --print-format '%n %v %r %s' 2>/dev/null >"$work/transaction"
+  else
+    note "fakeroot is not installed, the pacman transaction was not read"
+  fi
+fi
+
+wait_background
+
+# Keep only well formed transaction lines: name version repo size.
+awk 'NF >= 4 && $4 ~ /^[0-9]+$/' "$work/transaction" >"$work/transaction.clean"
+mv "$work/transaction.clean" "$work/transaction"
+
+n_pacman=$(wc -l <"$work/transaction")
+n_pacman=$((n_pacman + 0))
+n_aur=$(grep -c . "$work/aur")
+n_mise=$(grep -c . "$work/mise")
+
+download_mib=null
+if (( n_pacman > 0 )); then
+  total_bytes=$(awk '{ sum += $4 } END { print sum + 0 }' "$work/transaction")
+  download_mib=$((total_bytes / 1048576))
+fi
+download_partial=false
+(( n_aur + n_mise > 0 )) && download_partial=true
+
+omarchy_pending=false
+omarchy_pkg=""
+old_ver=""
+new_ver=""
+omarchy_pkg=$(awk '$1 == "omarchy" || $1 == "omarchy-dev" { print $1; exit }' "$work/transaction")
+if [[ -n $omarchy_pkg ]]; then
+  omarchy_pending=true
+  new_ver=$(awk -v p="$omarchy_pkg" '$1 == p { print $2; exit }' "$work/transaction")
+  if command -v expac >/dev/null 2>&1; then
+    old_ver=$(expac -Q '%v' "$omarchy_pkg" 2>/dev/null | head -1)
+  else
+    note "expac is not installed, the installed Omarchy version is unknown"
+  fi
+fi
+
+# Reboot rules of `omarchy update`: a kernel, hyprland, or an nvidia driver.
+reboot=false
+while read -r name _; do
+  [[ -n $name ]] || continue
+  if pacman -Qlq "$name" 2>/dev/null | grep -q '/vmlinuz$'; then
+    reboot=true
+  fi
+  case $name in
+    hyprland | nvidia*) reboot=true ;;
+  esac
+done <"$work/transaction"
+
+emit ok ""
+exit 0

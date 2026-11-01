@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stub: only "-Qlq <name>" is used. STUB_KERNEL_PKG names the package that ships /vmlinuz.
+if [[ $1 == -Qlq ]]; then
+  [[ $2 == "${STUB_KERNEL_PKG:-}" ]] && echo /usr/lib/modules/6.1/vmlinuz && echo /boot/vmlinuz
+  echo "/usr/share/doc/$2/README"
+fi
+exit 0

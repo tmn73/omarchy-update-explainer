@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "tmn73.update-explainer",
+  "name": "Update Explainer",
+  "version": "0.1.0",
+  "author": "tmn73",
+  "license": "MIT",
+  "description": "Pending system updates in the bar, with an explanation from your default agent.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Update Explainer",
+    "description": "Shows the pending Omarchy, pacman, AUR and mise updates, and opens your default agent to explain them.",
+    "category": "System",
+    "aliases": [
+      "update",
+      "updates",
+      "pacman",
+      "explainer"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 1800
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 300,
+        "max": 21600,
+        "step": 300,
+        "defaultValue": 1800
+      }
+    ]
+  }
+}

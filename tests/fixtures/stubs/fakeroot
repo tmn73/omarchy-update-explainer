@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Stub: prints the transaction lines "name version repo size".
+[[ -n ${STUB_TRANSACTION:-} ]] && printf '%s\n' "$STUB_TRANSACTION"
+exit 0

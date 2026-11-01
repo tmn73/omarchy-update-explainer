@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Stub: STUB_CHECK_EXIT (default 0), STUB_CHECK_ERR printed on stderr.
+[[ -n ${STUB_CHECK_ERR:-} ]] && printf '%s\n' "$STUB_CHECK_ERR" >&2
+exit "${STUB_CHECK_EXIT:-0}"
