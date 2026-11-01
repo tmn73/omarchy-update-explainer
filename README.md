@@ -4,11 +4,17 @@ Pending Omarchy updates in the bar, explained by your own default agent.
 
 ## What it shows
 
-- **A count** of everything pending, in the bar and in a panel
-- **One row for each source**: Omarchy, system packages, AUR and mise
-- **A verdict line** with the download size and whether a reboot is expected
+- **The bar icon** shows only when something is waiting (or while the first
+  check runs, or after an error). When you are up to date, the bar slot is
+  empty. The icon never shows a number.
+- **A verdict in words** in the panel: "Updates are waiting" and whether a
+  reboot is needed, or "Everything is up to date".
+- **A section for each source that has updates**: Omarchy, system packages,
+  AUR and dev tools. Each section lists the first few items with their old and
+  new versions, then "and more" when the list is longer. Sources with nothing
+  to update do not show.
 
-Click "Explain" and your default agent opens in a terminal with the update
+Click "Tell me what changes" and your default agent opens in a terminal with the update
 data. It says what changes for you and what needs action. You can ask it
 follow-up questions there.
 
@@ -23,7 +29,8 @@ Omarchy Quattro with shell plugin support. The collector uses `checkupdates`,
 installed, and skips them with a note when they are not.
 
 The explanation uses the agent set with `omarchy default agent`. With none set,
-the primary button offers to choose one instead.
+the primary button reads "Choose an assistant" and opens the picker. The panel
+never shows the name of the agent.
 
 ## Install
 
@@ -74,7 +81,7 @@ omarchy plugin remove tmn73.update-explainer
 ## Billing and safety
 
 Nothing runs in the background that calls an agent. The agent starts only when
-you click "Explain", in a terminal you can see. There is no surprise API or
+you click "Tell me what changes", in a terminal you can see. There is no surprise API or
 subscription use. The plugin holds no API key and has no provider setting.
 
 - **Report file.** It lives in `$XDG_RUNTIME_DIR/update-explainer/report.txt`
@@ -101,16 +108,19 @@ subscription use. The plugin holds no API key and has no provider setting.
 
 ## Buttons
 
-- **Explain** writes the report, then runs `omarchy-agent-prompt` with the
-  instructions and the report path. With no default agent, the button runs
-  `omarchy-menu summon setup.default.agent` to pick one.
+- **Tell me what changes** writes the report, then runs `omarchy-agent-prompt`
+  with the instructions and the report path. It shows "Preparing the report..."
+  while it works. With no default agent, the button reads "Choose an assistant"
+  and runs `omarchy-menu summon setup.default.agent`.
 - **Update now** opens the stock update terminal with
   `omarchy-launch-floating-terminal-with-presentation omarchy-update`. If that
   launcher returns at once, the widget refreshes on the next timer tick instead
   of when the update ends.
+- **Check again** is the only button when nothing is waiting. It refreshes the
+  check.
 
-On a package install, the Omarchy row shows the version change, not a commit
-count.
+On a package install, the Omarchy section shows the version change, not a
+commit count.
 
 ## Agents
 
@@ -141,7 +151,7 @@ in memory.
 ## How it works
 
 `Service.qml` schedules `omarchy-update-explainer-collect --summary` and reads
-one JSON document from its stdout. On "Explain" it runs the same helper with
+one JSON document from its stdout. On "Tell me what changes" it runs the same helper with
 `--report <file>`, which writes the plain-text report for the agent. `Panel.qml`
 assembles small components. `Model.js` holds the logic worth testing and the
 prompt text.
