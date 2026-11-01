@@ -22,6 +22,16 @@ The stock `omarchy.system-update` widget only shows a dot for the Omarchy
 package. This plugin covers more sources, so we recommend you remove the stock
 widget (see "Replace the stock update widget" below).
 
+## Screenshots
+
+![The update panel with a pending Omarchy update](preview.png)
+
+The panel, opened from the bar, with an Omarchy update waiting.
+
+![The explanation the agent writes after "Tell me what changes"](explain.png)
+
+Real output from the author's ROG Zephyrus laptop. The labels say whether each change affects the machine.
+
 ## Requirements
 
 Omarchy Quattro with shell plugin support. The collector uses `checkupdates`,
