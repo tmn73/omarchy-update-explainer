@@ -26,7 +26,7 @@ make_sandbox() {
   rm -rf "$sandbox/bin"
   mkdir -p "$sandbox/bin"
   local tool path
-  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls; do
+  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls mkdir sleep flock rmdir; do
     path=$(command -v "$tool" 2>/dev/null) && ln -sf "$path" "$sandbox/bin/$tool"
   done
   for tool in checkupdates fakeroot pacman expac yay mise gh; do
@@ -46,7 +46,10 @@ run_case() {
 
 reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
-    STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG
+    STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
+    STUB_CHECK_LOCKDIR STUB_CHECK_DBLOG STUB_FAKEROOT_LOG
+  export XDG_RUNTIME_DIR="$sandbox/run"
+  rm -rf "$sandbox/run"
   MODE_ARGS=(--summary)
 }
 
@@ -233,7 +236,66 @@ report_fallback_note() {
   grep -q -i "transaction could not be read" "$sandbox/report.txt" || fail "report_fallback note"
 }
 
-for case_name in summary_ok summary_nothing_pending summary_checkupdates_fails \
+report_dev_version_refs() {
+  report_env
+  export STUB_TRANSACTION=$'omarchy-dev 4.0.0.r7534.g7eedd17-1 core 10485760'
+  export STUB_OLD_VERSIONS="omarchy-dev=4.0.0.r7500.gabcdef123-1"
+  run_case
+  [[ $code -eq 0 ]] || fail "report_dev_version exit $code"
+  grep -q -x -F "compare basecamp/omarchy abcdef123...7eedd17" "$sandbox/report.txt" \
+    || fail "report_dev_version compare line: $(grep compare "$sandbox/report.txt")"
+}
+
+report_dir_target() {
+  report_env
+  mkdir -p "$sandbox/existing-dir"
+  MODE_ARGS=(--report "$sandbox/existing-dir")
+  run_case
+  [[ $code -eq 0 ]] || fail "report_dir_target exit $code"
+  assert_jq '.state=="error" and (.message|length>0)' "$out" "report_dir_target state"
+  compgen -G "$sandbox/existing-dir/*" >/dev/null && fail "report_dir_target moved a file into the directory"
+}
+
+lock_private_db() {
+  reset_env
+  export STUB_CHECK_DBLOG="$sandbox/dblog" STUB_FAKEROOT_LOG="$sandbox/frlog"
+  rm -f "$sandbox/dblog" "$sandbox/frlog"
+  export STUB_TRANSACTION='foo 2.0-1 extra 1048576'
+  run_case
+  local want="$sandbox/run/update-explainer/checkup-db/"
+  grep -q -x -F "$want" "$sandbox/dblog" || fail "lock_private_db: checkupdates saw '$(cat "$sandbox/dblog" 2>/dev/null)'"
+  grep -q -F -- "--dbpath $want" "$sandbox/frlog" || fail "lock_private_db: pacman dbpath: $(cat "$sandbox/frlog" 2>/dev/null)"
+  [[ $(stat -c %a "$sandbox/run/update-explainer" 2>/dev/null) == 700 ]] || fail "lock_private_db: dir mode"
+}
+
+lock_without_runtime_dir() {
+  reset_env
+  unset XDG_RUNTIME_DIR
+  export STUB_CHECK_DBLOG="$sandbox/dblog"
+  rm -f "$sandbox/dblog"
+  export STUB_TRANSACTION='foo 2.0-1 extra 1048576'
+  run_case
+  assert_jq '.state=="ok" and .total==1' "$out" "lock_without_runtime_dir state"
+  [[ -z $(cat "$sandbox/dblog" 2>/dev/null) ]] || fail "lock_without_runtime_dir: set CHECKUPDATES_DB anyway"
+}
+
+lock_overlapping_runs() {
+  reset_env
+  mkdir -p "$sandbox/shared"
+  export STUB_CHECK_LOCKDIR="$sandbox/shared"
+  export STUB_TRANSACTION='foo 2.0-1 extra 1048576'
+  make_sandbox
+  PATH="$sandbox/bin" "$HELPER" --summary >"$sandbox/out1" 2>/dev/null &
+  PATH="$sandbox/bin" "$HELPER" --summary >"$sandbox/out2" 2>/dev/null &
+  wait
+  local n
+  for n in 1 2; do
+    jq -e '.state=="ok" and .total==1' "$sandbox/out$n" >/dev/null 2>&1 \
+      || fail "lock_overlapping_runs: run $n: $(head -c 300 "$sandbox/out$n")"
+  done
+}
+
+for case_name in report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures

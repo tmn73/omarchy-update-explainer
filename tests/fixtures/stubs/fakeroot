@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 # Stub: prints the transaction lines "name version repo size".
+# STUB_FAKEROOT_LOG receives the arguments of each call.
+[[ -n ${STUB_FAKEROOT_LOG:-} ]] && printf '%s\n' "$*" >>"$STUB_FAKEROOT_LOG"
 [[ -n ${STUB_TRANSACTION:-} ]] && printf '%s\n' "$STUB_TRANSACTION"
 exit "${STUB_FAKEROOT_EXIT:-0}"

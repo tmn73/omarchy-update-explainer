@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 # Stub: STUB_CHECK_EXIT (default 0), STUB_CHECK_ERR printed on stderr.
+# STUB_CHECK_LOCKDIR emulates the one shared pacman lock of the real tool: a
+# second overlapping run fails with exit 1, as "Cannot fetch updates" does.
+# STUB_CHECK_DBLOG receives the CHECKUPDATES_DB value the run saw.
+[[ -n ${STUB_CHECK_DBLOG:-} ]] && printf '%s\n' "${CHECKUPDATES_DB:-}" >>"$STUB_CHECK_DBLOG"
+if [[ -n ${STUB_CHECK_LOCKDIR:-} ]]; then
+  if ! mkdir "$STUB_CHECK_LOCKDIR/db.lck" 2>/dev/null; then
+    echo "Cannot fetch updates" >&2
+    exit 1
+  fi
+  sleep 0.4
+  rmdir "$STUB_CHECK_LOCKDIR/db.lck"
+fi
 [[ -n ${STUB_CHECK_ERR:-} ]] && printf '%s\n' "$STUB_CHECK_ERR" >&2
 [[ -n ${STUB_CHECK_OUT:-} ]] && printf '%s\n' "$STUB_CHECK_OUT"
 exit "${STUB_CHECK_EXIT:-0}"

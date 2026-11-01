@@ -96,9 +96,32 @@ if ! command -v checkupdates >/dev/null 2>&1; then
   exit 0
 fi
 
+# checkupdates and `pacman -Sup` share one sync database and one lock file.
+# Two overlapping runs (ours, or the stock update widget) make the second one
+# fail. So this helper syncs a private database, and a lock under the runtime
+# directory serializes our own runs. Without a runtime directory nothing is
+# created and the tools keep their defaults. The lock descriptor is opened
+# after the background jobs start, so they do not inherit it.
+lock_fd=""
+runtime_dir=${XDG_RUNTIME_DIR:-}
+if [[ -n $runtime_dir ]] && command -v flock >/dev/null 2>&1; then
+  state_dir="$runtime_dir/update-explainer"
+  if mkdir -p -m 700 "$state_dir" 2>/dev/null && exec {lock_fd}>"$state_dir/collect.lock" 2>/dev/null; then
+    export CHECKUPDATES_DB="$state_dir/checkup-db/"
+    flock "$lock_fd"
+  else
+    lock_fd=""
+  fi
+fi
+release_lock() {
+  [[ -n $lock_fd ]] && exec {lock_fd}>&-
+  lock_fd=""
+}
+
 checkupdates --nocolor >"$work/check-out" 2>"$work/check-err"
 check_status=$?
 if (( check_status == 1 )); then
+  release_lock
   wait_background
   err=$(head -c 2000 "$work/check-err")
   fail_out "checkupdates failed: ${err:-no error text}"
@@ -128,6 +151,7 @@ read_transaction() {
 }
 
 read_transaction
+release_lock
 
 wait_background
 
@@ -293,7 +317,7 @@ write_report() {
 }
 
 if [[ $mode == --report ]]; then
-  if write_report && mv -f "$tmp_report" "$report_file"; then
+  if write_report && mv -fT "$tmp_report" "$report_file"; then
     tmp_report=""
     emit_report "$report_file"
   else
