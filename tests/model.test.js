@@ -307,3 +307,25 @@ test('panelVerdict: error shows the helper message, checking waits, otherwise th
   assert.strictEqual(Model.panelVerdict(summary(), 'pending', '').title, 'Updates are waiting')
   assert.doesNotMatch(Model.panelVerdict(null, 'checking', '').title, HAS_DIGIT)
 })
+
+test('buildPrompt starts with one decision-first bottom line', () => {
+  assert.ok(lines(Model.buildPrompt(PATH)).includes(
+    '1. ONE bottom line that says one of: install now, it can wait, or it needs attention. Add whether a reboot is needed and how much will be downloaded.'))
+})
+
+test('buildPrompt asks for a per-change verdict on this machine in plain words', () => {
+  assert.ok(lines(Model.buildPrompt(PATH)).includes(
+    'For every change, say in one short clause whether it affects this machine. Judge with the "This machine" section of the file, for example the hardware a change is for against the hardware listed there. Use the plain words "Affects you", "Does not affect you" or "Not sure".'))
+})
+
+test('buildPrompt says what to do when the facts are not enough', () => {
+  assert.ok(lines(Model.buildPrompt(PATH)).includes(
+    'If the file does not give enough facts to judge a change, say "Not sure" and say what is missing. Do not guess.'))
+})
+
+test('buildPrompt keeps the group limits and the Sources line last in the list', () => {
+  const l = lines(Model.buildPrompt(PATH))
+  assert.strictEqual(l.filter(x => x.startsWith('2. At most 5 bullets')).length, 1)
+  assert.strictEqual(l.filter(x => x.startsWith('3. At most 5 bullets')).length, 1)
+  assert.ok(l.some(x => x.startsWith('5. A final line that starts with "Sources:"')))
+})
