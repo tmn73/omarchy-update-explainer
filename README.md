@@ -1,0 +1,111 @@
+# Omarchy Update Explainer
+
+Pending Omarchy updates in the bar, explained by your own default agent.
+
+## What it shows
+
+- **A count** of everything pending, in the bar and in a panel
+- **One row for each source**: Omarchy, system packages, AUR and mise
+- **A verdict line** with the download size and whether a reboot is expected
+
+Click "Explain" and your default agent opens in a terminal with the update
+data. It says what changes for you and what needs action. You can ask it
+follow-up questions there.
+
+The stock `omarchy.system-update` widget only shows a dot for the Omarchy
+package. This plugin covers more sources, and the two can run side by side.
+
+## Requirements
+
+Omarchy Quattro with shell plugin support. The collector uses `checkupdates`,
+`pacman`, `expac` and `jq`. It also uses `yay` and `mise` when they are
+installed, and skips them with a note when they are not.
+
+The explanation uses the agent set with `omarchy default agent`. With none set,
+the primary button offers to choose one instead.
+
+## Install
+
+```bash
+omarchy plugin add https://github.com/tmn73/omarchy-update-explainer.git --enable
+```
+
+### Update
+
+```bash
+omarchy plugin update tmn73.update-explainer
+```
+
+### Remove
+
+```bash
+omarchy plugin remove tmn73.update-explainer
+```
+
+## Billing and safety
+
+Nothing runs in the background that calls an agent. The agent starts only when
+you click "Explain", in a terminal you can see. There is no surprise API or
+subscription use. The plugin holds no API key and has no provider setting.
+
+- **Report file.** It lives in `$XDG_RUNTIME_DIR/update-explainer/report.txt`
+  with mode 600. The widget removes it when a check finds nothing pending, and
+  when the widget closes.
+- **No update data in a command line.** The agent gets fixed instructions and
+  the path of the report file. The update data stays in the file.
+- **No GitHub call.** The collector runs `checkupdates`, `yay -Qua` and
+  `mise outdated`, as `omarchy update` does. The agent looks up commits and pull
+  requests itself.
+- **No automatic update.** The plugin never runs the update on its own. The
+  prompt tells the agent never to run it.
+
+## Buttons
+
+- **Explain** writes the report, then runs `omarchy-agent-prompt` with the
+  instructions and the report path. With no default agent, the button runs
+  `omarchy-menu summon setup.default.agent` to pick one.
+- **Update now** opens the stock update terminal with
+  `omarchy-launch-floating-terminal-with-presentation omarchy-update`. If that
+  launcher returns at once, the widget refreshes on the next timer tick instead
+  of when the update ends.
+
+On a package install, the Omarchy row shows the version change, not a commit
+count.
+
+## Agents
+
+Tested agents: none yet. Any agent that `omarchy default agent` supports should work, because the prompt is agent-neutral, but only the interactive launch is used.
+
+## Settings
+
+| Setting | Default | Range |
+| --- | --- | --- |
+| Refresh interval (seconds) | 1800 | 300 to 21600 |
+
+## Local development
+
+```bash
+bash tests/run-all.sh
+```
+
+This runs the collector test, the QML source checks and `node --test` on
+`Model.js`. The collector test uses stub commands from `tests/fixtures/stubs`
+and makes no network call.
+
+QML changes need `omarchy-restart-shell`. The shell keeps the compiled version
+in memory.
+
+## How it works
+
+`Service.qml` schedules `omarchy-update-explainer-collect --summary` and reads
+one JSON document from its stdout. On "Explain" it runs the same helper with
+`--report <file>`, which writes the plain-text report for the agent. `Panel.qml`
+assembles small components. `Model.js` holds the logic worth testing and the
+prompt text.
+
+A failed refresh never discards a good summary. The panel keeps the last good
+data and shows the error beside it.
+
+## License
+
+MIT
