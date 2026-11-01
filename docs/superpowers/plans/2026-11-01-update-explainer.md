@@ -8,7 +8,7 @@
 
 **Tech Stack:** bash and jq (helper), QML with Quickshell (widget), node's built-in test runner (logic), shell tests with stubbed commands (helper), `qmllint`.
 
-**Spec:** `docs/superpowers/specs/2026-11-01-update-explainer-design.md`. Mockups: https://claude.ai/artifact/AcSHZqNa45mHwDn3VbVUTf (private link, sample text only).
+**Spec:** `docs/superpowers/specs/2026-11-01-update-explainer-design.md`. Mockups: kept outside the repository.
 
 ## Global Constraints
 

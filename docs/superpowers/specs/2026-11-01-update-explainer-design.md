@@ -69,7 +69,7 @@ The user chose A after seeing the mockups.
 
 ## Design
 
-Mockups: https://claude.ai/artifact/AcSHZqNa45mHwDn3VbVUTf (private link).
+Mockups: kept outside the repository (the final look is in the screenshots of the README).
 
 Flow, started by the user at every step:
 
