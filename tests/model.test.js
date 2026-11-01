@@ -329,3 +329,13 @@ test('buildPrompt keeps the group limits and the Sources line last in the list',
   assert.strictEqual(l.filter(x => x.startsWith('3. At most 5 bullets')).length, 1)
   assert.ok(l.some(x => x.startsWith('5. A final line that starts with "Sources:"')))
 })
+
+test('buildPrompt requires a label at the start of every change line', () => {
+  assert.ok(lines(Model.buildPrompt(PATH)).includes(
+    'Format rule: every change line starts with exactly one of these three labels, followed by a colon: "Affects you:", "Does not affect you:" or "Not sure:". Write the label first, then the change. Do not put the verdict anywhere else in the line.'))
+})
+
+test('buildPrompt gives one example line built on neutral data', () => {
+  assert.ok(lines(Model.buildPrompt(PATH)).includes(
+    'Example line: - Does not affect you: omarchy-foo 1.0 to 1.1 only changes hardware this machine does not have.'))
+})
