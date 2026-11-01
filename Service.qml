@@ -25,7 +25,10 @@ Item {
   readonly property string status: Model.statusOf(summary, runState)
   readonly property string tooltip: Model.tooltip(summary, status)
 
-  readonly property string reportDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/update-explainer"
+  // Empty when the session has no runtime directory. Nothing is written then:
+  // a fixed path in a shared folder would invite symlink and squatting tricks.
+  readonly property string runtimeDir: String(Quickshell.env("XDG_RUNTIME_DIR") || "")
+  readonly property string reportDir: runtimeDir + "/update-explainer"
   readonly property string reportPath: reportDir + "/report.txt"
 
   function helperPath() {
@@ -60,6 +63,7 @@ Item {
   }
 
   function removeReport() {
+    if (runtimeDir === "") return
     if (!cleanupProcess.running) {
       cleanupProcess.command = ["rm", "-f", reportPath]
       cleanupProcess.running = true
@@ -70,6 +74,10 @@ Item {
   // report run starts by making it private to this user.
   function explain() {
     if (busy) return
+    if (runtimeDir === "") {
+      message = qsTr("The runtime directory is not available, so the update report cannot be written.")
+      return
+    }
     busy = true
     mkdirProcess.command = ["mkdir", "-p", "-m", "700", reportDir]
     mkdirProcess.running = true

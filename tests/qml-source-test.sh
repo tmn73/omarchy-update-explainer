@@ -88,6 +88,10 @@ if [[ -f $ROOT/Service.qml ]]; then
   # No agent name in the service
   hasnt $S 'claude|codex' "Service.qml names an agent"
 
+  # No predictable shared directory: without XDG_RUNTIME_DIR nothing is written
+  hasnt $S '/tmp' "Service.qml contains a /tmp literal"
+  has $S 'runtimeDir === ""' "explain does not refuse when the runtime dir is missing"
+
   # No absolute plugin paths
   has $S "Qt\.resolvedUrl" "the helper is not resolved relatively"
   hasnt $S "/home/|/usr/local/" "Service.qml contains an absolute path"
