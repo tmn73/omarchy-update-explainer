@@ -17,7 +17,11 @@ Item {
   id: root
 
   property var settings: ({})
+  // The system summary as the helper last reported it, and the plugins that are
+  // behind their remote. `shown` is the two together (Model.withPlugins).
   property var summary: null
+  property var pluginList: []
+  readonly property var shown: Model.withPlugins(summary, pluginList)
   property string runState: "loading"
   property string message: ""
   // Why the last Explain click failed. Cleared by the next click. Kept apart
@@ -33,16 +37,19 @@ Item {
 
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 1800, 300, 21600)
   readonly property bool checkMise: boolSetting("checkMise", true)
+  readonly property bool checkPlugins: boolSetting("checkPlugins", true)
   // Which update types may show the bar icon. The popup lists all of them.
   readonly property var barTypes: ({
     omarchy: boolSetting("showOmarchy", true),
     system: boolSetting("showSystem", true),
-    tools: boolSetting("showTools", true)
+    tools: boolSetting("showTools", true),
+    plugins: boolSetting("showPlugins", true)
   })
   // When the last check ended (ms since the epoch). Manual refreshes wait 30 s.
   property real lastRunEndedAt: 0
   property bool summaryTimedOut: false
   property bool reportTimedOut: false
+  property bool pluginsTimedOut: false
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -61,9 +68,10 @@ Item {
     return Math.max(minimum, Math.min(maximum, value))
   }
 
-  readonly property string status: Model.statusOf(summary, runState)
-  readonly property string barStatus: Model.barStatus(summary, status, barTypes)
-  readonly property string tooltip: Model.tooltip(summary, status, message)
+  readonly property bool systemPending: Model.hasUpdates(summary)
+  readonly property string status: Model.statusOf(shown, runState)
+  readonly property string barStatus: Model.barStatus(shown, status, barTypes)
+  readonly property string tooltip: Model.tooltip(shown, status, message)
 
   // Empty when the session has no runtime directory. Nothing is written then:
   // a fixed path in a shared folder would invite symlink and squatting tricks.
@@ -75,6 +83,10 @@ Item {
     return Qt.resolvedUrl("omarchy-update-explainer-collect").toString().replace(/^file:\/\//, "")
   }
 
+  function pluginsHelperPath() {
+    return Qt.resolvedUrl("omarchy-update-explainer-plugins").toString().replace(/^file:\/\//, "")
+  }
+
   // `forced` is for the timer and the Check again button. Every other caller
   // (panel open, R key, clicks, IPC) is ignored within 30 s of the last run.
   function refresh(forced) {
@@ -83,6 +95,11 @@ Item {
       summaryProcess.command = [helperPath()].concat(Model.helperArgs("summary", "", checkMise))
       summaryProcess.running = true
       summaryDeadline.restart()
+    }
+    if (checkPlugins && !pluginsProcess.running && Model.refreshAllowed(Date.now(), lastRunEndedAt, forced === true)) {
+      pluginsProcess.command = [pluginsHelperPath()]
+      pluginsProcess.running = true
+      pluginsDeadline.restart()
     }
     if (!agentProcess.running) {
       agentProcess.command = ["omarchy-default-agent"]
@@ -127,8 +144,8 @@ Item {
   }
 
   function finishReport(raw) {
-    reportDeadline.stop()
     if (reportTimedOut) {
+      reportDeadline.stop()
       reportTimedOut = false
       return
     }
@@ -139,8 +156,17 @@ Item {
       data = null
     }
     if (data && data.state === "ok" && typeof data.path === "string" && data.path !== "") {
+      // Outdated plugins add their new commit subjects to the report first.
+      if (checkPlugins && pluginList.length > 0) {
+        appendProcess.command = [pluginsHelperPath(), "--append-report", data.path]
+        appendProcess.reportPath = data.path
+        appendProcess.running = true
+        return
+      }
+      reportDeadline.stop()
       Quickshell.execDetached(["omarchy-agent-prompt", Model.buildPrompt(data.path)])
     } else {
+      reportDeadline.stop()
       explainError = data && data.message ? String(data.message) : qsTr("The update report could not be written.")
     }
     busy = false
@@ -151,6 +177,14 @@ Item {
     updateProcess.command = ["omarchy-launch-floating-terminal-with-presentation", "omarchy-update"]
     updateProcess.running = true
   }
+
+  function updatePlugins() {
+    if (pluginUpdateProcess.running) return
+    pluginUpdateProcess.command = ["omarchy-launch-floating-terminal-with-presentation", "omarchy plugin update --yes"]
+    pluginUpdateProcess.running = true
+  }
+
+  onCheckPluginsChanged: if (!checkPlugins) pluginList = []
 
   function chooseAgent() {
     Quickshell.execDetached(["omarchy-menu", "summon", "setup.default.agent"])
@@ -182,14 +216,26 @@ Item {
   }
 
   Timer {
+    id: pluginsDeadline
+
+    interval: Model.PLUGINS_DEADLINE_MS
+    onTriggered: {
+      if (!pluginsProcess.running) return
+      root.pluginsTimedOut = true
+      pluginsProcess.running = false
+    }
+  }
+
+  Timer {
     id: reportDeadline
 
     interval: Model.REPORT_DEADLINE_MS
     onTriggered: {
-      if (!reportProcess.running && !mkdirProcess.running) return
-      root.reportTimedOut = reportProcess.running
+      if (!reportProcess.running && !mkdirProcess.running && !appendProcess.running) return
+      root.reportTimedOut = reportProcess.running || appendProcess.running
       mkdirProcess.running = false
       reportProcess.running = false
+      appendProcess.running = false
       root.explainError = qsTr("The report took too long and was stopped.")
       root.busy = false
     }
@@ -229,6 +275,56 @@ Item {
       id: summaryCollector
 
       waitForEnd: true
+    }
+  }
+
+  // A failed or late plugin check keeps the list the widget already has.
+  Process {
+    id: pluginsProcess
+
+    running: false
+    command: []
+    onExited: function (exitCode) {
+      pluginsDeadline.stop()
+      var items = root.pluginsTimedOut ? null : Model.parsePlugins(String(pluginsCollector.text || ""))
+      root.pluginsTimedOut = false
+      if (items !== null) root.pluginList = items
+    }
+
+    stdout: StdioCollector {
+      id: pluginsCollector
+
+      waitForEnd: true
+    }
+  }
+
+  // Adds the plugin section to the report. Without it the agent still gets
+  // the report that was written.
+  Process {
+    id: appendProcess
+
+    property string reportPath: ""
+
+    running: false
+    command: []
+    onExited: function (exitCode) {
+      reportDeadline.stop()
+      if (root.reportTimedOut) {
+        root.reportTimedOut = false
+        return
+      }
+      Quickshell.execDetached(["omarchy-agent-prompt", Model.buildPrompt(reportPath)])
+      root.busy = false
+    }
+  }
+
+  Process {
+    id: pluginUpdateProcess
+
+    running: false
+    command: []
+    onExited: function (exitCode) {
+      root.refresh(true)
     }
   }
 

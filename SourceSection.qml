@@ -1,18 +1,23 @@
 import QtQuick
 import qs.Commons as Commons
 import qs.Commons
+import qs.Ui
 
 // One update source: a small capitalised label, then one row for each item
 // (name on the left, "old to new" on the right), then "and more" when the
 // list was cut. The data comes from Model.sections, so this file draws and
-// decides nothing. No number is ever shown.
+// decides nothing. No number is ever shown. A section can carry one action
+// button, for the plugins section: Update plugins.
 Column {
   id: root
 
   property string label: ""
   property var rows: []
   property bool more: false
+  property bool hasAction: false
   property string fontFamily: Style.font.family
+
+  signal actionRequested()
 
   spacing: Style.space(4)
 
@@ -83,5 +88,22 @@ Column {
     color: Commons.Color.muted
     font.family: root.fontFamily
     font.pixelSize: Style.font.body
+  }
+
+  Button {
+    height: Math.max(Style.space(34), 34)
+    visible: root.hasAction
+    text: qsTr("Update plugins")
+    focusable: true
+    bordered: true
+    fontFamily: root.fontFamily
+    fontSize: Style.font.body
+    horizontalPadding: Style.space(16)
+    radius: Style.space(8)
+
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+
+    onClicked: root.actionRequested()
   }
 }

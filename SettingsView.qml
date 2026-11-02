@@ -9,11 +9,10 @@ Column {
 
   property color foreground: Commons.Color.foreground
   property string fontFamily: Style.font.family
-  property bool showOmarchy: true
-  property bool showSystem: true
-  property bool showTools: true
+  // Which types show the bar icon: {omarchy, system, tools, plugins}.
+  property var types: ({})
 
-  // `key` is the setting name: showOmarchy, showSystem or showTools.
+  // `key` is the setting name: showOmarchy, showSystem, showTools or showPlugins.
   signal toggled(string key)
 
   spacing: Style.space(8)
@@ -34,7 +33,7 @@ Column {
     foreground: root.foreground
     fontFamily: root.fontFamily
     label: qsTr("Omarchy")
-    checked: root.showOmarchy
+    checked: root.types.omarchy !== false
     onActivated: root.toggled("showOmarchy")
   }
 
@@ -43,7 +42,7 @@ Column {
     fontFamily: root.fontFamily
     label: qsTr("System packages")
     hint: qsTr("Includes the reboot icon.")
-    checked: root.showSystem
+    checked: root.types.system !== false
     onActivated: root.toggled("showSystem")
   }
 
@@ -51,8 +50,17 @@ Column {
     foreground: root.foreground
     fontFamily: root.fontFamily
     label: qsTr("AUR and dev tools")
-    checked: root.showTools
+    checked: root.types.tools !== false
     onActivated: root.toggled("showTools")
+  }
+
+  ToggleRow {
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+    label: qsTr("Plugins")
+    hint: qsTr("Shell plugins that are behind their repository.")
+    checked: root.types.plugins !== false
+    onActivated: root.toggled("showPlugins")
   }
 
   Text {

@@ -20,6 +20,36 @@ function parseSummary(raw) {
   return { ok: true, summary: data, message: "" }
 }
 
+// The helper for plugins prints {"state":"ok","items":[{name,from,to}]}.
+// Anything else gives null, and the caller keeps the list it already has.
+function parsePlugins(raw) {
+  var data
+  try {
+    data = JSON.parse(String(raw || ""))
+  } catch (e) {
+    return null
+  }
+  if (!data || data.state !== "ok" || !Array.isArray(data.items)) return null
+  return data.items.filter(function (item) {
+    return item && typeof item.name === "string" && item.name !== ""
+  }).map(function (item) {
+    return { name: item.name, from: String(item.from || ""), to: String(item.to || "") }
+  })
+}
+
+// The summary with the outdated plugins counted as a fifth source. Nothing in
+// the base summary is changed. Without a base summary there is nothing to show.
+function withPlugins(base, plugins) {
+  if (!base) return null
+  var list = Array.isArray(plugins) ? plugins : []
+  if (list.length === 0) return base
+  var out = Object.assign({}, base)
+  out.sources = Object.assign({}, base.sources, { plugins: list.length })
+  out.items = Object.assign({}, base.items, { plugins: list })
+  out.total = base.total + list.length
+  return out
+}
+
 // runState is the outcome of the last refresh: "ok", "error" or "loading".
 // A failed refresh wins even when an older summary is still held.
 function statusOf(summary, runState) {
@@ -39,12 +69,14 @@ function pendingNames(summary) {
   if (s.pacman - (o.pending ? 1 : 0) > 0) names.push("system packages")
   if (s.aur > 0) names.push("AUR")
   if (s.mise > 0) names.push("dev tools")
+  if (s.plugins > 0) names.push("plugins")
   return names
 }
 
 // The type of the pending updates, most urgent first: reboot, omarchy, system
-// (pacman without the Omarchy package), tools (AUR or mise). Empty when none.
-// `show` turns types off for the bar: {omarchy, system, tools}, each true by
+// (pacman without the Omarchy package), tools (AUR or mise), plugins. Empty
+// when none. `show` turns types off for the bar: {omarchy, system, tools,
+// plugins}, each true by
 // default. A reboot counts only when Omarchy or system updates are shown,
 // because a reboot comes from those packages.
 function kindOf(summary, show) {
@@ -57,10 +89,12 @@ function kindOf(summary, show) {
   var hasOmarchy = !!o.pending && f.omarchy !== false
   var hasSystem = system > 0 && f.system !== false
   var hasTools = tools > 0 && f.tools !== false
+  var hasPlugins = (s.plugins || 0) > 0 && f.plugins !== false
   if (summary.reboot && (hasOmarchy || hasSystem)) return "reboot"
   if (hasOmarchy) return "omarchy"
   if (hasSystem) return "system"
-  return hasTools ? "tools" : ""
+  if (hasTools) return "tools"
+  return hasPlugins ? "plugins" : ""
 }
 
 // The status the bar item follows. A pending status with nothing in a shown
@@ -142,7 +176,8 @@ function sections(summary) {
   var spec = [
     { id: "pacman", label: "SYSTEM PACKAGES", count: (s.pacman || 0) - (o.pending ? 1 : 0) },
     { id: "aur", label: "AUR", count: s.aur || 0 },
-    { id: "mise", label: "DEV TOOLS", count: s.mise || 0 }
+    { id: "mise", label: "DEV TOOLS", count: s.mise || 0 },
+    { id: "plugins", label: "PLUGINS", count: s.plugins || 0 }
   ]
   spec.forEach(function (src) {
     if (src.count <= 0) return
@@ -203,6 +238,7 @@ function nextState(prev, raw) {
 // Run limits, a little above the worst case of the helper's own timeouts.
 var SUMMARY_DEADLINE_MS = 330000
 var REPORT_DEADLINE_MS = 540000
+var PLUGINS_DEADLINE_MS = 120000
 var REFRESH_MIN_GAP_MS = 30000
 
 // Manual refreshes (panel open, R key, click) wait 30 seconds after the last
@@ -226,12 +262,12 @@ function agentNotice() {
 
 function buildPrompt(dataPath) {
   return [
-    "Read the file " + dataPath + ". It lists the pending updates for this Linux system (Omarchy, system packages, AUR packages and dev tools).",
+    "Read the file " + dataPath + ". It lists the pending updates for this Linux system (Omarchy, system packages, AUR packages, dev tools and shell plugins).",
     "Explain the updates to the user in their own language, as a short briefing.",
     "Write in this order:",
     "1. ONE bottom line that says one of: install now, it can wait, or it needs attention. Add whether a reboot is needed and how much will be downloaded.",
     "2. At most 5 bullets on what changes in Omarchy, in terms of what the user will notice. If the file has a compare line for Omarchy, read the pull requests behind those commits to understand the changes.",
-    "3. At most 5 bullets on the apps and tools that change.",
+    "3. At most 5 bullets on the apps and tools that change. For shell plugins, the file lists the subjects of the new commits of each plugin: say in plain words what the user will notice.",
     "4. A heads-up only when the user must act, for example a config file to merge or a service to restart. Leave this part out when nothing needs action.",
     "5. A final line that starts with \"Sources:\" and lists the sources you read and the ones you could not read (for example a pull request that did not load).",
     "For every change you list, say in one short clause whether it affects this machine. Judge with the \"This machine\" section of the file, for example the hardware a change is for against the hardware listed there. Use the plain words \"Affects you\", \"Does not affect you\" or \"Not sure\".",
@@ -248,6 +284,8 @@ function buildPrompt(dataPath) {
 if (typeof module !== "undefined") {
   module.exports = {
     parseSummary: parseSummary,
+    parsePlugins: parsePlugins,
+    withPlugins: withPlugins,
     statusOf: statusOf,
     kindOf: kindOf,
     barStatus: barStatus,
@@ -263,6 +301,7 @@ if (typeof module !== "undefined") {
     agentNotice: agentNotice,
     SUMMARY_DEADLINE_MS: SUMMARY_DEADLINE_MS,
     REPORT_DEADLINE_MS: REPORT_DEADLINE_MS,
+    PLUGINS_DEADLINE_MS: PLUGINS_DEADLINE_MS,
     hasUpdates: hasUpdates,
     explainAfterRefresh: explainAfterRefresh,
     nextState: nextState,

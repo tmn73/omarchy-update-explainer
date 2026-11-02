@@ -206,7 +206,7 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'function refocus\(\)' "Panel.qml has no refocus"
   has Panel.qml 'keyCatcher\.forceActiveFocus' "refocus does not target the key catcher"
   # Held data keeps showing after a failed refresh.
-  has Panel.qml 'readonly property bool hasUpdates: Model\.hasUpdates\(updates\.summary\)' "Panel.qml has no hasUpdates"
+  has Panel.qml 'readonly property bool hasUpdates: Model\.hasUpdates\(updates\.shown\)' "Panel.qml has no hasUpdates"
   has Panel.qml 'visible: root\.hasUpdates' "the sections hide when the last refresh failed"
   has Panel.qml 'pending: root\.hasUpdates' "the buttons follow the status, not the held data"
   hasnt Panel.qml 'status === "pending"' "Panel.qml gates the panel on the pending status"

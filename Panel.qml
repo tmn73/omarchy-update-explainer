@@ -20,15 +20,15 @@ Panel {
 
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property bool hasSummary: updates.summary !== null
+  readonly property bool hasSummary: updates.shown !== null
   // Held data stays valid after a failed refresh, so it keeps showing.
-  readonly property bool hasUpdates: Model.hasUpdates(updates.summary)
-  readonly property var verdictParts: Model.panelVerdict(updates.summary, updates.status, updates.message)
+  readonly property bool hasUpdates: Model.hasUpdates(updates.shown)
+  readonly property var verdictParts: Model.panelVerdict(updates.shown, updates.status, updates.message)
 
   // Nerd Font glyphs. A pending check shows one per update type (Model.kindOf).
   readonly property var glyphs: ({
     current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071",
-    reboot: "\uf01e", omarchy: "\uf0aa", system: "\uf1b2", tools: "\uf121", settings: "\uf013"
+    reboot: "\uf01e", omarchy: "\uf0aa", system: "\uf1b2", tools: "\uf121", plugins: "\uf12e", settings: "\uf013"
   })
 
   // True while the popup shows the settings screen.
@@ -81,7 +81,7 @@ Panel {
 
     anchors.fill: parent
     bar: root.bar
-    text: root.glyphs[Model.iconKey(updates.summary, updates.barStatus, updates.barTypes)] || root.glyphs.current
+    text: root.glyphs[Model.iconKey(updates.shown, updates.barStatus, updates.barTypes)] || root.glyphs.current
     active: updates.status === "error"
     opacity: updates.status === "checking" ? 0.5 : 1
     tooltipText: updates.tooltip
@@ -142,9 +142,7 @@ Panel {
           visible: root.settingsOpen
           foreground: root.foreground
           fontFamily: root.fontFamily
-          showOmarchy: updates.barTypes.omarchy
-          showSystem: updates.barTypes.system
-          showTools: updates.barTypes.tools
+          types: updates.barTypes
           onToggled: function (key) { store.toggle(key, true) }
         }
 
@@ -163,7 +161,7 @@ Panel {
           visible: root.hasUpdates && !root.settingsOpen
 
           Repeater {
-            model: root.hasSummary ? Model.sections(updates.summary) : []
+            model: root.hasSummary ? Model.sections(updates.shown) : []
 
             delegate: SourceSection {
               required property var modelData
@@ -172,6 +170,8 @@ Panel {
               label: modelData.label
               rows: modelData.rows
               more: modelData.more
+              hasAction: modelData.id === "plugins"
+              onActionRequested: updates.updatePlugins()
               fontFamily: root.fontFamily
             }
           }
@@ -185,6 +185,7 @@ Panel {
           agent: updates.agent
           busy: updates.busy
           pending: root.hasUpdates
+          systemPending: updates.systemPending
           explainError: updates.explainError
           fontFamily: root.fontFamily
           onExplainRequested: { updates.explain(); root.refocus() }

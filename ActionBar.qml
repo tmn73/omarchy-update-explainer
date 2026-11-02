@@ -4,26 +4,26 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Actions at the bottom of the panel. While updates wait: a soft tinted primary button ("Tell me what changes", or
-// "Choose an assistant" when no default agent is set) and a solid "Update now",
-// compact on one row. Otherwise one outlined "Check again". Nothing starts on
-// its own, and the agent is never named.
+// Actions at the bottom of the panel. While updates wait: a tinted "Tell me
+// what changes" (or "Choose an assistant" with no default agent) and, for system
+// updates only, a solid "Update now". Otherwise an outlined "Check again".
+// Nothing starts on its own, and the agent is never named.
 Column {
   id: root
 
   property string agent: ""
   property bool busy: false
   property bool pending: false
+  property bool systemPending: true
   property string explainError: ""
   property string fontFamily: Style.font.family
   // Keyboard cursor: -1 none, then 0 or 1.
   property int cursor: -1
-  readonly property int buttonCount: pending ? 2 : 1
+  readonly property int buttonCount: pending && systemPending ? 2 : 1
   signal explainRequested()
   signal chooseRequested()
   signal updateRequested()
   signal refreshRequested()
-
   spacing: Style.space(10)
 
   function firstAction() {
@@ -39,7 +39,7 @@ Column {
   }
 
   function activateFocused() {
-    if (pending && cursor === 1) updateRequested()
+    if (pending && systemPending && cursor === 1) updateRequested()
     else firstAction()
   }
 
@@ -66,7 +66,7 @@ Column {
 
     Button {
       height: Math.max(Style.space(34), 34)
-      visible: root.pending
+      visible: root.pending && root.systemPending
       text: qsTr("Update now")
       focusable: true
       hasCursor: root.cursor === 1

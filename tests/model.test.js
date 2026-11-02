@@ -506,3 +506,43 @@ test('barStatus hides the bar when no shown type has updates', () => {
   assert.strictEqual(Model.barStatus(summary(only), 'pending', {}), 'pending')
   assert.strictEqual(Model.barStatus(summary(only), 'error', { tools: false }), 'error')
 })
+
+test('parsePlugins keeps valid items and rejects anything else', () => {
+  const good = JSON.stringify({ state: 'ok', items: [{ name: 'a.b', from: 'abc1234', to: 'def5678' }, { name: '' }, null] })
+  assert.deepStrictEqual(Model.parsePlugins(good), [{ name: 'a.b', from: 'abc1234', to: 'def5678' }])
+  assert.strictEqual(Model.parsePlugins('not json'), null)
+  assert.strictEqual(Model.parsePlugins(JSON.stringify({ state: 'error', message: 'x' })), null)
+  assert.strictEqual(Model.parsePlugins(JSON.stringify({ state: 'ok' })), null)
+})
+
+test('withPlugins adds a fifth source and leaves the base untouched', () => {
+  const base = summary()
+  const merged = Model.withPlugins(base, [{ name: 'a', from: 'abc1234', to: 'def5678' }])
+  assert.strictEqual(merged.sources.plugins, 1)
+  assert.strictEqual(merged.total, base.total + 1)
+  assert.strictEqual(base.sources.plugins, undefined)
+  assert.strictEqual(Model.withPlugins(base, []), base)
+  assert.strictEqual(Model.withPlugins(null, [{ name: 'a' }]), null)
+})
+
+test('plugins make a pending summary with their own type, section and name', () => {
+  const only = Model.withPlugins(summary({ total: 0, omarchy: { pending: false }, sources: { pacman: 0, aur: 0, mise: 0 } }),
+    [{ name: 'a', from: 'abc1234', to: 'def5678' }])
+  assert.strictEqual(Model.statusOf(only, 'ok'), 'pending')
+  assert.strictEqual(Model.kindOf(only), 'plugins')
+  assert.strictEqual(Model.kindOf(only, { plugins: false }), '')
+  assert.match(Model.tooltip(only, 'pending', ''), /plugins/)
+  const section = Model.sections(only).find((x) => x.id === 'plugins')
+  assert.strictEqual(section.label, 'PLUGINS')
+  assert.deepStrictEqual(section.rows, [{ name: 'a', version: 'abc1234 to def5678' }])
+})
+
+test('a system type wins over plugins for the icon', () => {
+  const merged = Model.withPlugins(summary(), [{ name: 'a', from: 'abc1234', to: 'def5678' }])
+  assert.strictEqual(Model.kindOf(merged), 'omarchy')
+  assert.strictEqual(Model.kindOf(merged, { omarchy: false, system: false, tools: false }), 'plugins')
+})
+
+test('buildPrompt covers shell plugins', () => {
+  assert.match(Model.buildPrompt('/r/report.txt'), /shell plugins/)
+})

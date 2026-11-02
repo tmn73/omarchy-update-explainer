@@ -1,18 +1,24 @@
 # Omarchy Update Explainer
 
-Pending Omarchy updates in the bar, explained by your own default agent.
+Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, explained by your own default agent.
 
 ## What it shows
 
 - **The bar icon** shows only when something is waiting (or while the first
   check runs, or after an error). When you are up to date, the bar slot is
-  empty. The icon never shows a number.
+  empty. The icon never shows a number. Its glyph follows the most urgent type
+  of update: reboot needed, Omarchy, system packages, AUR or dev tools, then
+  plugins.
 - **A verdict in words** in the panel: "Updates are waiting" and whether a
   reboot is needed, or "Everything is up to date".
 - **A section for each source that has updates**: Omarchy, system packages,
-  AUR and dev tools. Each section lists the first few items with their old and
+  AUR, dev tools and shell plugins. Each section lists the first few items with their old and
   new versions, then "and more" when the list is longer. Sources with nothing
-  to update do not show.
+  to update do not show. The plugins section has an "Update plugins" button,
+  because `omarchy update` does not update shell plugins.
+- **A settings screen** behind the gear in the panel title. It turns the bar
+  icon on or off for each type of update, for people who do not care about
+  some of them.
 
 Click "Tell me what changes" and your default agent opens in a terminal with the update
 data. It says what changes for you and what needs action. You can ask it
@@ -36,7 +42,8 @@ Real output from the author's ROG Zephyrus laptop. The labels say whether each c
 
 Omarchy Quattro with shell plugin support. The collector uses `checkupdates`,
 `pacman`, `expac` and `jq`. It also uses `yay` and `mise` when they are
-installed, and skips them with a note when they are not.
+installed, and skips them with a note when they are not. The plugin check
+uses `git`.
 
 The explanation uses the agent set with `omarchy default agent`. With none set,
 the primary button reads "Choose an assistant" and opens the picker. The panel
@@ -119,6 +126,19 @@ subscription use. The plugin holds no API key and has no provider setting.
   contact the tool sources, including GitHub, and unauthenticated GitHub limits
   are small. You can turn the dev tool check off with the "Check dev tool
   updates (mise)" setting. The agent looks up commits and pull requests itself.
+- **Plugin check.** A second helper, `omarchy-update-explainer-plugins`, runs
+  `git fetch` in each git-managed shell plugin under
+  `~/.config/omarchy/plugins` (the plugins `omarchy plugin update` can update),
+  a few at a time, with a time limit and no password prompt. It never merges,
+  so a plugin folder is not changed. It lists only the plugins that
+  `omarchy plugin update` can bring forward: a plugin with local commits, or
+  with edits in the way of the new commits, is left out because the command
+  would refuse it. It contacts the plugin repositories. The
+  "Check plugin updates" setting turns it off. When you ask the agent to explain
+  the updates, the report also gets the subjects of the new commits of each
+  listed plugin (at most 10 per plugin, each cut at 120 characters). The
+  "Update plugins" button in the popup runs `omarchy plugin update --yes`. `omarchy update` does not
+  update plugins.
 - **Timeouts.** Every tool the collector runs has a time limit (about a minute
   for the network tools, a few minutes for the file check of the report), and
   the widget stops a run that takes too long. A hung mirror cannot freeze the
@@ -173,8 +193,13 @@ Tested with Claude Code on the author's machine (Explain ran end to end). Other 
 | Show the icon for Omarchy updates | on | on or off |
 | Show the icon for system package updates | on | on or off |
 | Show the icon for AUR and dev tool updates | on | on or off |
+| Check plugin updates | on | on or off |
+| Show the icon for plugin updates | on | on or off |
 
-The three icon settings only decide when the bar icon shows. The popup always lists every update. The icon changes with the most urgent shown type: reboot, Omarchy, system packages, then AUR or dev tools.
+The four icon settings only decide when the bar icon shows. The popup always
+lists every update. Change them with the gear in the panel, or with
+`omarchy bar set tmn73.update-explainer <key> <true|false> --json`
+(keys `showOmarchy`, `showSystem`, `showTools`, `showPlugins`).
 
 ## Local development
 

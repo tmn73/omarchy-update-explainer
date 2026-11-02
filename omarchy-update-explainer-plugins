@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Print the git-managed Omarchy shell plugins that `omarchy plugin update` can
+# bring forward, as one JSON document. Read only: it fetches but never merges or resets, so a
+# plugin folder keeps its files. Every fetch runs under `timeout`, a few at a
+# time, and never asks for a password.
+# Contract: one JSON document on stdout, exit 0 for every failure the user can meet.
+#   {"state":"ok","items":[{"name":"<plugin id>","from":"<hash>","to":"<hash>"}]}
+#
+# Usage: omarchy-update-explainer-plugins [--append-report <file>]
+# With --append-report, a "Plugins" section (each plugin and the subjects of
+# its new commits) is added to the end of a report file that already exists,
+# and the output is {"state":"ok"}. The subjects are other people's text: control
+# characters are removed and each line is cut at 120 characters.
+# Test hooks (digits only): UPDATE_EXPLAINER_PLUGINS_DIR (a folder),
+# UPDATE_EXPLAINER_FETCH_TIMEOUT (seconds).
+set -uo pipefail
+
+export GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes}"
+
+report_file=""
+case ${1:-} in
+  "") ;;
+  --append-report)
+    report_file=${2:-}
+    [[ -n $report_file && $# -eq 2 ]] || { echo "usage: omarchy-update-explainer-plugins [--append-report <file>]" >&2; exit 2; }
+    ;;
+  *) echo "usage: omarchy-update-explainer-plugins [--append-report <file>]" >&2; exit 2 ;;
+esac
+
+plugins_dir=${UPDATE_EXPLAINER_PLUGINS_DIR:-$HOME/.config/omarchy/plugins}
+fetch_timeout=30
+[[ ${UPDATE_EXPLAINER_FETCH_TIMEOUT:-} =~ ^[1-9][0-9]*$ ]] && fetch_timeout=$UPDATE_EXPLAINER_FETCH_TIMEOUT
+max_parallel=6
+max_items=20
+
+work=$(mktemp -d) || { echo '{"state":"error","message":"cannot create a temporary folder"}'; exit 0; }
+trap 'rm -rf "$work"' EXIT
+trap 'exit 143' TERM INT HUP
+
+# One plugin: fetch, then write "<from> <to>" to its result file when
+# `omarchy plugin update` can take it: the remote is strictly ahead (a
+# fast-forward), and no file the user edited is touched by the new commits. A
+# plugin with local commits or with edits in the way is left out, because the
+# update command would refuse it. A failed fetch writes nothing.
+check_one() {
+  local id=$1 dir=$2 head fetched
+  timeout --kill-after=5 "$fetch_timeout" git -C "$dir" fetch --quiet origin HEAD 2>/dev/null || return 0
+  head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || return 0
+  fetched=$(git -C "$dir" rev-parse FETCH_HEAD 2>/dev/null) || return 0
+  [[ $head == "$fetched" ]] && return 0
+  git -C "$dir" merge-base --is-ancestor "$head" "$fetched" 2>/dev/null || return 0
+  if [[ -n $(comm -12 \
+    <(git -C "$dir" diff --name-only HEAD 2>/dev/null | sort) \
+    <(git -C "$dir" diff --name-only HEAD "$fetched" 2>/dev/null | sort)) ]]; then
+    return 0
+  fi
+  git -C "$dir" log --format=%s -n 10 "$head..$fetched" 2>/dev/null | tr -d '\000-\037\177' | cut -c1-120 >"$work/$id.log"
+  printf '%s %s\n' "${head:0:7}" "${fetched:0:7}" >"$work/$id"
+}
+
+ids=()
+for dir in "$plugins_dir"/*/; do
+  [[ -d $dir/.git ]] || continue
+  id=$(basename "$dir")
+  # Plugin ids are plain names. Anything else is skipped, as the shell does.
+  [[ $id =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $id != *..* ]] || continue
+  ids+=("$id")
+  while (( $(jobs -rp | wc -l) >= max_parallel )); do wait -n; done
+  check_one "$id" "${dir%/}" 9>&- &
+done
+wait
+
+items='[]'
+count=0
+for id in "${ids[@]}"; do
+  [[ -s $work/$id ]] || continue
+  (( count >= max_items )) && break
+  read -r from to <"$work/$id"
+  items=$(jq -c --arg name "$id" --arg from "$from" --arg to "$to" '. + [{name: $name, from: $from, to: $to}]' <<<"$items")
+  count=$((count + 1))
+done
+
+if [[ -n $report_file ]]; then
+  if [[ ! -f $report_file || -L $report_file ]]; then
+    jq -nc --arg message "the report file is not a regular file" '{state: "error", message: $message}'
+    exit 0
+  fi
+  {
+    echo "## Plugins"
+    echo "Shell plugins that are behind their repository. Each line is a plugin, then the subjects of its new commits."
+    for id in "${ids[@]}"; do
+      [[ -s $work/$id ]] || continue
+      read -r from to <"$work/$id"
+      echo "$id: $from to $to"
+      sed 's/^/  - /' "$work/$id.log"
+    done
+    echo
+  } >>"$report_file"
+  echo '{"state":"ok"}'
+  exit 0
+fi
+
+jq -nc --argjson items "$items" '{state: "ok", items: $items}'
