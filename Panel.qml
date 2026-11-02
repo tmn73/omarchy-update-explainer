@@ -120,10 +120,10 @@ Panel {
           updates.refresh()
       }
 
-      Column {
+      ScrollBody {
         id: content
 
-        width: parent.width
+        anchors.fill: parent
         spacing: Style.space(20)
 
         PanelHeader {
