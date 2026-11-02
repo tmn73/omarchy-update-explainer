@@ -546,3 +546,9 @@ test('a system type wins over plugins for the icon', () => {
 test('buildPrompt covers shell plugins', () => {
   assert.match(Model.buildPrompt('/r/report.txt'), /shell plugins/)
 })
+
+test('buildPrompt asks for a bottom line that counts plugins', () => {
+  const p = Model.buildPrompt('/r/report.txt')
+  assert.match(p, /omarchy plugin update/)
+  assert.match(p, /Never say that everything is up to date while plugins are listed/)
+})

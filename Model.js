@@ -266,6 +266,7 @@ function buildPrompt(dataPath) {
     "Explain the updates to the user in their own language, as a short briefing.",
     "Write in this order:",
     "1. ONE bottom line that says one of: install now, it can wait, or it needs attention. Add whether a reboot is needed and how much will be downloaded.",
+    "Shell plugins are not installed by omarchy update. When the file has a Plugins section, the bottom line must say that plugins are waiting and that they update with the Update plugins button or with omarchy plugin update. Never say that everything is up to date while plugins are listed.",
     "2. At most 5 bullets on what changes in Omarchy, in terms of what the user will notice. If the file has a compare line for Omarchy, read the pull requests behind those commits to understand the changes.",
     "3. At most 5 bullets on the apps and tools that change. For shell plugins, the file lists the subjects of the new commits of each plugin: say in plain words what the user will notice.",
     "4. A heads-up only when the user must act, for example a config file to merge or a service to restart. Leave this part out when nothing needs action.",
