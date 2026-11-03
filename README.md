@@ -141,8 +141,10 @@ subscription use. The plugin holds no API key and has no provider setting.
   GitHub API. It reads at most 8 packages, keeps at most 1500 characters per
   package, and caches the result per package and version in
   `~/.cache/update-explainer/notes`. A package with no GitHub project, or no
-  matching release, gets a line that says so. Unauthenticated GitHub limits are
-  small (60 requests an hour). Set `GITHUB_TOKEN` to raise them.
+  matching release, gets a line that says so. It sends no credential, uses https only,
+  follows at most 3 redirects, gives each request 8 seconds and cuts each
+  answer at a fixed size. Unauthenticated GitHub limits are small (60
+  requests an hour), and the cache keeps a package from being fetched twice.
   `mise outdated` may
   contact the tool sources, including GitHub, and unauthenticated GitHub limits
   are small. You can turn the dev tool check off with the "Check dev tool

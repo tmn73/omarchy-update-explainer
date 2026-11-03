@@ -35,6 +35,9 @@ printf 'url="https://foo.example"\nsource=("https://github.com/acme/foo/releases
 printf 'url="https://bar.example"\nsource=("https://bar.example/bar.tar.gz")\n' >"$web/arch/bar/-/raw/main/PKGBUILD"
 printf 'url=x\nsource=("git+https://github.com/GloriousEggroll/proton-ge-custom.git")\n' >"$web/aur/plain/PKGBUILD"
 printf '[{"tag_name":"v1.0.0","body":"old"},{"tag_name":"v1.1.0","body":"You can now do a thing.\\u0007\\nSecond line."}]' >"$web/gh/repos/acme/foo/releases"
+mkdir -p "$web/arch/big/-/raw/main" "$web/gh/repos/acme/big"
+printf 'url=x\nsource=("https://github.com/acme/big/archive/v${pkgver}.tar.gz")\n' >"$web/arch/big/-/raw/main/PKGBUILD"
+{ printf '[{"tag_name":"v1.1","body":"'; head -c 2000000 /dev/zero | tr '\0' 'x'; printf '"}]'; } >"$web/gh/repos/acme/big/releases"
 mkdir -p "$web/gh/repos/GloriousEggroll/proton-ge-custom"
 printf '[{"tag_name":"GE-Proton11-12","body":"# GE-Proton11-12\\nWine got newer."}]' >"$web/gh/repos/GloriousEggroll/proton-ge-custom/releases"
 
@@ -48,6 +51,8 @@ foo 1:1.0.0-1 -> 1:1.1.0-2 [extra] 1 MiB | foo
 bar 2.0-1 -> 2.1-1 [extra] 1 MiB | bar has no GitHub source
 rebuilt 3.0-1 -> 3.0-2 [extra] 1 MiB | same upstream version
 omarchy-dev 1-1 -> 1-2 [omarchy] 1 MiB | not on the Arch GitLab
+big 1.0-1 -> 1.1-1 [extra] 1 MiB | answer larger than the cap
+.. 1-1 -> 2-1 [extra] 1 MiB | a name that is a path
 TOTAL download: 4 MiB
 
 ## AUR
@@ -68,6 +73,9 @@ has "$report" '### bar 2.0-1 -> 2.1-1' "a package without GitHub is still listed
 has "$report" '(no release notes found)' "a missing note says so"
 hasnt "$report" '### rebuilt' "a rebuild is skipped"
 hasnt "$report" '### omarchy-dev' "a package from the omarchy repository is skipped"
+has "$report" '### big 1.0-1 -> 1.1-1' "an oversized answer is still listed"
+hasnt "$report" 'xxxxxxxxxx' "an oversized answer is cut, not read"
+hasnt "$report" '### ..' "a package name that is a path is skipped"
 has "$report" 'Wine got newer.' "an AUR package matches a tag with other punctuation"
 hasnt "$report" $'\a' "control characters are removed"
 [[ -s "$sandbox/cache/foo-1_1.1.0-2" ]] || fail "the notes are cached"
