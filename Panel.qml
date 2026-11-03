@@ -23,7 +23,6 @@ Panel {
   readonly property bool hasSummary: updates.shown !== null
   // Held data stays valid after a failed refresh, so it keeps showing.
   readonly property bool hasUpdates: Model.hasUpdates(updates.shown)
-  readonly property var verdictParts: Model.panelVerdict(updates.shown, updates.status, updates.message)
 
   // Nerd Font glyphs. A pending check shows one per update type (Model.kindOf).
   readonly property var glyphs: ({
@@ -103,7 +102,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(420))
-    contentHeight: panel.fittedContentHeight(content.implicitHeight, Style.space(640))
+    contentHeight: panel.fittedContentHeight(content.implicitHeight + (footer.visible ? footer.height + Style.space(12) : 0), Style.space(640))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -123,8 +122,12 @@ Panel {
       ScrollBody {
         id: content
 
-        anchors.fill: parent
-        spacing: Style.space(20)
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: footer.visible ? footer.top : parent.bottom
+        anchors.bottomMargin: footer.visible ? Style.space(12) : 0
+        spacing: Style.space(18)
 
         PanelHeader {
           width: parent.width
@@ -146,42 +149,37 @@ Panel {
           onToggled: function (key) { store.toggle(key, true) }
         }
 
-        VerdictBlock {
+        UpdatesBody {
           width: parent.width
           visible: !root.settingsOpen
-          title: root.verdictParts.title
-          detail: root.verdictParts.detail
-          tone: root.verdictParts.tone
+          summary: updates.shown
+          status: updates.status
+          message: updates.message
           fontFamily: root.fontFamily
+          onPluginsRequested: updates.updatePlugins()
         }
+      }
 
-        Column {
+      // The buttons stay at the bottom while the list above scrolls.
+      Column {
+        id: footer
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        visible: !root.settingsOpen
+        spacing: Style.space(12)
+
+        Rectangle {
           width: parent.width
-          spacing: Style.space(16)
-          visible: root.hasUpdates && !root.settingsOpen
-
-          Repeater {
-            model: root.hasSummary ? Model.sections(updates.shown) : []
-
-            delegate: SourceSection {
-              required property var modelData
-
-              width: parent.width
-              label: modelData.label
-              rows: modelData.rows
-              more: modelData.more
-              hasAction: modelData.id === "plugins"
-              onActionRequested: updates.updatePlugins()
-              fontFamily: root.fontFamily
-            }
-          }
+          height: 1
+          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.14)
         }
 
         ActionBar {
           id: actions
 
           width: parent.width
-          visible: !root.settingsOpen
           agent: updates.agent
           busy: updates.busy
           pending: root.hasUpdates

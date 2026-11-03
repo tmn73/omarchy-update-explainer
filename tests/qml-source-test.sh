@@ -194,10 +194,12 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'ipcTarget: "tmn73\.update-explainer"' "Panel.qml has the wrong ipcTarget"
   has Panel.qml 'Service \{' "Panel.qml does not instantiate the Service"
   has Panel.qml 'Accessible\.name' "the bar button has no Accessible.name"
-  has Panel.qml 'Model\.panelVerdict' "Panel.qml does not take the verdict from Model.panelVerdict"
-  has Panel.qml 'Model\.sections\(' "Panel.qml does not draw Model.sections"
-  has Panel.qml 'VerdictBlock \{' "Panel.qml does not use VerdictBlock"
-  has Panel.qml 'SourceSection \{' "Panel.qml does not use SourceSection"
+  has Panel.qml 'UpdatesBody \{' "Panel.qml does not use UpdatesBody"
+  has UpdatesBody.qml 'Model\.panelVerdict' "UpdatesBody.qml does not take the verdict from Model.panelVerdict"
+  has UpdatesBody.qml 'Model\.sections\(' "UpdatesBody.qml does not draw Model.sections"
+  has UpdatesBody.qml 'Model\.stats\(' "UpdatesBody.qml does not take the summary card from Model.stats"
+  has UpdatesBody.qml 'VerdictBlock \{' "UpdatesBody.qml does not use VerdictBlock"
+  has UpdatesBody.qml 'SourceSection \{' "UpdatesBody.qml does not use SourceSection"
   has Panel.qml 'onRefreshRequested: \{ updates\.refresh\(true\); root\.refocus\(\) \}' "Check again does not refresh and restore focus"
   # Every button path hands focus back to the key catcher.
   for handler in onExplainRequested onChooseRequested onUpdateRequested onRefreshRequested; do
@@ -207,7 +209,7 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has Panel.qml 'keyCatcher\.forceActiveFocus' "refocus does not target the key catcher"
   # Held data keeps showing after a failed refresh.
   has Panel.qml 'readonly property bool hasUpdates: Model\.hasUpdates\(updates\.shown\)' "Panel.qml has no hasUpdates"
-  has Panel.qml 'visible: root\.hasUpdates' "the sections hide when the last refresh failed"
+  has UpdatesBody.qml 'Model\.hasUpdates\(summary\)' "the sections hide when the last refresh failed"
   has Panel.qml 'pending: root\.hasUpdates' "the buttons follow the status, not the held data"
   hasnt Panel.qml 'status === "pending"' "Panel.qml gates the panel on the pending status"
   has Panel.qml 'updates\.lastFailed' "the bar does not keep the error icon during a retry"
@@ -227,8 +229,8 @@ if [[ -f $ROOT/Panel.qml ]]; then
 fi
 if [[ -f $ROOT/SourceSection.qml ]]; then
   has SourceSection.qml 'Repeater' "SourceSection.qml draws no rows"
-  has SourceSection.qml 'elide: Text\.ElideMiddle' "the version text does not elide in the middle"
-  has SourceSection.qml 'row\.width \* 0\.6' "the version text has no width cap"
+  has SectionRow.qml 'elide: Text\.ElideMiddle' "the version text does not elide in the middle"
+  has SectionRow.qml 'row\.width \* 0\.6' "the version text has no width cap"
   has SourceSection.qml 'qsTr\("and more"\)' "SourceSection.qml has no 'and more' row"
   hasnt SourceSection.qml 'length|count' "SourceSection.qml computes or shows a count"
 fi

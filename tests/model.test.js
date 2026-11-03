@@ -592,3 +592,31 @@ test('buildPrompt keeps the report short to read', () => {
   assert.match(p, /Under the hood is at most 2 lines/)
   assert.match(p, /Never write a long paragraph/)
 })
+
+test('stats: headline, chips without zero counts, reboot flag and download size', () => {
+  const st = Model.stats(summary({
+    total: 19, reboot: true, downloadMiB: 971, downloadPartial: true,
+    omarchy: { pending: true, package: 'omarchy-dev', from: 'a', to: 'b' },
+    sources: { pacman: 16, aur: 2, mise: 0 }
+  }))
+  assert.strictEqual(st.headline, '19 updates are waiting')
+  assert.strictEqual(st.reboot, true)
+  assert.strictEqual(st.download, 'At least 971 MiB to download')
+  assert.deepStrictEqual(st.chips.map((c) => [c.id, c.count]), [['omarchy', 1], ['pacman', 15], ['aur', 2]])
+})
+
+test('stats: one update reads in the singular, a full size reads "About", no size is left out', () => {
+  const one = Model.stats(summary({ total: 1, downloadMiB: 12, downloadPartial: false, sources: { pacman: 1, aur: 0, mise: 0 } }))
+  assert.strictEqual(one.headline, '1 update is waiting')
+  assert.strictEqual(one.download, 'About 12 MiB to download')
+  assert.strictEqual(Model.stats(summary({ total: 1, downloadMiB: null, sources: { pacman: 1, aur: 0, mise: 0 } })).download, '')
+})
+
+test('sections carry a badge, a more text and the sections that start open', () => {
+  const s = summary({ omarchy: { pending: true, package: 'omarchy-dev', from: 'a', to: 'b' },
+    sources: { pacman: 7, aur: 1, mise: 0 }, items: { pacman: items(7, 'p'), aur: items(1, 'a'), mise: [] } })
+  const secs = Model.sections(s)
+  assert.deepStrictEqual(secs.map((x) => [x.id, x.badge, x.open]), [['omarchy', '1', true], ['pacman', '6', true], ['aur', '1', false]])
+  assert.strictEqual(secs[1].moreText, 'and 2 more')
+  assert.strictEqual(secs[2].moreText, '')
+})

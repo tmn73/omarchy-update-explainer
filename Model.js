@@ -170,7 +170,7 @@ function sections(summary) {
   var s = summary.sources || {}
   var out = []
   if (o.pending) {
-    out.push({ id: "omarchy", label: "OMARCHY", more: false,
+    out.push({ id: "omarchy", label: "OMARCHY", more: false, moreText: "", badge: "1", open: true,
                rows: [{ name: o.package || "omarchy", version: versionText({ from: o.from, to: o.to }) }] })
   }
   var spec = [
@@ -185,9 +185,33 @@ function sections(summary) {
       .filter(function (item) { return !(src.id === "pacman" && o.pending && item.name === o.package) })
       .slice(0, MAX_ROWS)
       .map(function (item) { return { name: item.name, version: versionText(item) } })
-    out.push({ id: src.id, label: src.label, rows: rows, more: src.count > rows.length })
+    var left = src.count - rows.length
+    out.push({ id: src.id, label: src.label, rows: rows, more: left > 0,
+               moreText: left > 0 ? "and " + left + " more" : "",
+               badge: String(src.count), open: src.id === "pacman" || src.id === "plugins" })
   })
   return out
+}
+
+// The summary card at the top of the popup: one headline, a reboot flag, one
+// chip for each source that has items, and the download size. The size leaves
+// out AUR packages and dev tools, so it reads "At least" when some wait.
+function stats(summary) {
+  var o = summary.omarchy || {}
+  var s = summary.sources || {}
+  var chips = [
+    { id: "omarchy", label: "Omarchy", count: o.pending ? 1 : 0 },
+    { id: "pacman", label: "System", count: Math.max(0, (s.pacman || 0) - (o.pending ? 1 : 0)) },
+    { id: "aur", label: "AUR", count: s.aur || 0 },
+    { id: "mise", label: "Dev tools", count: s.mise || 0 },
+    { id: "plugins", label: "Plugins", count: s.plugins || 0 }
+  ].filter(function (chip) { return chip.count > 0 })
+  var n = summary.total || 0
+  var download = ""
+  if (typeof summary.downloadMiB === "number" && summary.downloadMiB > 0)
+    download = (summary.downloadPartial ? "At least " : "About ") + summary.downloadMiB + " MiB to download"
+  return { headline: n + (n === 1 ? " update is waiting" : " updates are waiting"),
+           reboot: !!summary.reboot, chips: chips, download: download }
 }
 
 function explainLabel(agent, busy) {
@@ -301,6 +325,7 @@ if (typeof module !== "undefined") {
     barVisible: barVisible,
     verdict: verdict,
     sections: sections,
+    stats: stats,
     explainLabel: explainLabel,
     panelVerdict: panelVerdict,
     refreshAllowed: refreshAllowed,

@@ -9,13 +9,19 @@ Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, expl
   empty. The icon never shows a number. Its glyph follows the most urgent type
   of update: reboot needed, Omarchy, system packages, AUR or dev tools, then
   plugins.
-- **A verdict in words** in the panel: "Updates are waiting" and whether a
-  reboot is needed, or "Everything is up to date".
-- **A section for each source that has updates**: Omarchy, system packages,
-  AUR, dev tools and shell plugins. Each section lists the first few items with their old and
-  new versions, then "and more" when the list is longer. Sources with nothing
-  to update do not show. The plugins section has an "Update plugins" button,
-  because `omarchy update` does not update shell plugins.
+- **A summary card** at the top of the panel: how many updates wait, a
+  "Reboot needed" flag, one chip for each source that has updates, and the
+  download size ("At least" when AUR packages or dev tools wait, because their
+  size is not known). When nothing waits, the card gives way to "Everything is
+  up to date" in words.
+- **A card for each source that has updates**: Omarchy, system packages, AUR,
+  dev tools and shell plugins. Click the header of a card to open or close it.
+  Omarchy, system packages and plugins start open, the others closed. An open
+  card lists the first few items with their old and new versions, then "and N
+  more" when the list is longer. Sources with nothing to update do not show.
+  The plugins card has an "Update plugins" button, because `omarchy update`
+  does not update shell plugins.
+- **Buttons that stay at the bottom** while the list scrolls.
 - **A settings screen** behind the gear in the panel title. It turns the bar
   icon on or off for each type of update, for people who do not care about
   some of them.
