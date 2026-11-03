@@ -576,3 +576,19 @@ test('buildPrompt asks for a bottom line that counts plugins', () => {
   assert.match(p, /omarchy plugin update/)
   assert.match(p, /Never say that everything is up to date while plugins are listed/)
 })
+
+test('buildPrompt asks for Markdown headings, bold labels and backticked names', () => {
+  const p = Model.buildPrompt(PATH)
+  assert.match(p, /Format the answer as Markdown/)
+  assert.match(p, /## .* Heads up/)
+  assert.match(p, /## .* Highlights/)
+  assert.match(p, /\*\*Affects you:\*\*/)
+  assert.match(p, /backticks/)
+})
+
+test('buildPrompt keeps the report short to read', () => {
+  const p = Model.buildPrompt(PATH)
+  assert.match(p, /at most 20 words/)
+  assert.match(p, /Under the hood is at most 2 lines/)
+  assert.match(p, /Never write a long paragraph/)
+})

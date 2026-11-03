@@ -272,6 +272,8 @@ function buildPrompt(dataPath) {
     "4. ALSO NEW: small visible changes, one line each, at most 5. A change you could not confirm goes here with the label Not sure, never in Highlights.",
     "5. UNDER THE HOOD: everything with no visible effect, in one line.",
     "Put the pull request number or the project name in brackets at the end of each change line when the file gives it.",
+    "Format the answer as Markdown, because the terminal shows it with color. Use these section headings on their own line, with a blank line before and after: \"## \ud83d\udea8 Heads up\", \"## \u2728 Highlights\", \"## \ud83d\udd27 Also new\", \"## \ud83e\uddf1 Under the hood\". Write the headline in bold. Write every label in bold, for example \"**Affects you:**\". Put every package, file, command and project name in backticks.",
+    "Keep it light to read. Every change line is one line of at most 20 words. Only a highlight has a second line, for why it matters. Under the hood is at most 2 lines. The Sources line is one short line: name only what you could not read and what matters. Never write a long paragraph.",
     "The file may have a Release notes section with the notes of the projects. Use it. When a release note is only a link, read that page. For a change you still cannot explain, say Not sure and say what is missing.",
     "If the file has a compare line for Omarchy, read the pull requests behind those commits to understand the changes. For shell plugins, the file lists the subjects of the new commits of each plugin.",
     "6. A final line that starts with \"Sources:\" and lists the sources you read and the ones you could not read (for example a pull request that did not load).",
