@@ -245,6 +245,11 @@ if [[ -f $ROOT/TintButton.qml ]]; then
   hasnt TintButton.qml 'Style\.space\((44|48)\)|width: parent' "TintButton is large or full width"
   hasnt TintButton.qml 'iconText' "TintButton has an icon"
 fi
+[[ -f $ROOT/SolidButton.qml ]] || fail "SolidButton.qml is missing"
+if [[ -f $ROOT/SolidButton.qml ]]; then
+  has SolidButton.qml 'root\.hot' "SolidButton.qml has no hover color of its own"
+  has SolidButton.qml 'foreground: Commons\.Color\.background' "SolidButton.qml label is not the background color"
+fi
 if [[ -f $ROOT/ActionBar.qml ]]; then
   has ActionBar.qml 'enabled: !root\.busy' "the primary button is not disabled while busy"
   has ActionBar.qml 'TintButton \{' "the primary button is not a TintButton"
@@ -263,16 +268,17 @@ if [[ -f $ROOT/ActionBar.qml ]]; then
   has ActionBar.qml 'function moveFocus\(' "ActionBar.qml has no moveFocus"
   has ActionBar.qml 'function activateFocused\(' "ActionBar.qml has no activateFocused"
   buttons=$(grep -cE '^    Button \{' "$ROOT/ActionBar.qml" || true)
-  ((buttons == 2)) || fail "ActionBar.qml has $buttons plain Buttons, expected 2"
+  ((buttons == 1)) || fail "ActionBar.qml has $buttons plain Buttons, expected 1 (Check again)"
+  has ActionBar.qml 'SolidButton \{' "Update now is not a SolidButton"
   focusables=$(grep -cE 'focusable: true' "$ROOT/ActionBar.qml" || true)
-  ((focusables == 2)) || fail "ActionBar.qml has $focusables focusable plain buttons, expected 2"
+  ((focusables == 1)) || fail "ActionBar.qml has $focusables focusable plain buttons, expected 1"
   hasnt ActionBar.qml 'TapHandler' "ActionBar.qml still uses a TapHandler"
   # Compact on purpose: a desktop mouse and keyboard panel, so the 44 px touch
   # target rule does not apply. Buttons are about 34 px, sized to their text.
-  has ActionBar.qml 'Flow \{' "the buttons are not on one wrapping row"
-  grep -c 'Math\.max(Style\.space(34), 34)' "$ROOT/ActionBar.qml" | grep -qx 2 || fail "the ActionBar buttons are not 34 px"
+  has ActionBar.qml 'buttons\.cell' "the buttons do not share the row"
+  grep -c 'Math\.max(Style\.space(34), 34)' "$ROOT/ActionBar.qml" | grep -qx 1 || fail "the Check again button is not 34 px"
   hasnt ActionBar.qml 'Style\.space\((44|48)\)' "ActionBar.qml keeps a 44 or 48 px button"
-  grep -c 'Accessible\.name' "$ROOT/ActionBar.qml" | grep -qx 2 || fail "each button needs an Accessible.name"
+  grep -c 'Accessible\.name' "$ROOT/ActionBar.qml" | grep -qx 1 || fail "the plain button needs an Accessible.name"
   has ActionBar.qml 'Model\.explainLabel' "the primary label does not come from Model.explainLabel"
   has ActionBar.qml 'chooseRequested' "ActionBar.qml has no choose signal"
   has ActionBar.qml 'explainRequested' "ActionBar.qml has no explain signal"

@@ -6,7 +6,8 @@ import "Model.js" as Model
 
 // Actions at the bottom of the panel. While updates wait: a tinted "Tell me
 // what changes" (or "Choose an assistant" with no default agent) and, for system
-// updates only, a solid "Update now". Otherwise an outlined "Check again".
+// updates only, a solid "Update now", sharing the row equally. Otherwise an
+// outlined "Check again".
 // Nothing starts on its own, and the agent is never named.
 Column {
   id: root
@@ -49,12 +50,17 @@ Column {
     fontFamily: root.fontFamily
   }
 
-  // Compact buttons sized to their text; the row wraps when too narrow.
-  Flow {
+  // The buttons share the row equally, so they fill the popup.
+  Row {
+    id: buttons
+
+    readonly property real cell: (width - spacing * (root.buttonCount - 1)) / root.buttonCount
+
     width: parent.width
     spacing: Style.space(10)
 
     TintButton {
+      width: buttons.cell
       visible: root.pending
       text: Model.explainLabel(root.agent, root.busy)
       hasCursor: root.cursor === 0
@@ -64,26 +70,17 @@ Column {
       onClicked: root.firstAction()
     }
 
-    Button {
-      height: Math.max(Style.space(34), 34)
+    SolidButton {
+      width: buttons.cell
       visible: root.pending && root.systemPending
       text: qsTr("Update now")
-      focusable: true
       hasCursor: root.cursor === 1
-      background: Commons.Color.foreground
-      foreground: Commons.Color.background
       fontFamily: root.fontFamily
-      fontSize: Style.font.body
-      horizontalPadding: Style.space(16)
-      radius: Style.space(8)
-
-      Accessible.role: Accessible.Button
-      Accessible.name: text
-
       onClicked: root.updateRequested()
     }
 
     Button {
+      width: buttons.cell
       height: Math.max(Style.space(34), 34)
       visible: !root.pending
       text: qsTr("Check again")
