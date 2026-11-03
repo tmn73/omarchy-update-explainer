@@ -620,3 +620,12 @@ test('sections carry a badge, a more text and the sections that start open', () 
   assert.strictEqual(secs[1].moreText, 'and 2 more')
   assert.strictEqual(secs[2].moreText, '')
 })
+
+test('a shared epoch is dropped from the version text and a changed one is kept', () => {
+  const rowOf = (from, to) => Model.sections(summary({
+    sources: { pacman: 0, aur: 1, mise: 0 }, items: { pacman: [], aur: [{ name: 'x', from, to }], mise: [] }
+  }))[0].rows[0].version
+  assert.strictEqual(rowOf('1:GE_Proton11_11-1', '1:GE_Proton11_12-1'), 'GE_Proton11_11-1 to GE_Proton11_12-1')
+  assert.strictEqual(rowOf('1:2.0-1', '2:1.0-1'), '1:2.0-1 to 2:1.0-1')
+  assert.strictEqual(rowOf('1.0-1', '1.1-1'), '1.0-1 to 1.1-1')
+})

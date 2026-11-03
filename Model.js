@@ -153,7 +153,15 @@ function versionText(item) {
   var a = DEV_VERSION.exec(item.from)
   var b = DEV_VERSION.exec(item.to || "")
   if (a && b) return a[1].slice(0, 7) + " to " + b[1].slice(0, 7)
-  return item.from + " to " + item.to
+  // An epoch ("1:") that is the same on both sides says nothing and costs room.
+  var from = String(item.from)
+  var to = String(item.to || "")
+  var epoch = /^[0-9]+:/.exec(from)
+  if (epoch && to.indexOf(epoch[0]) === 0) {
+    from = from.slice(epoch[0].length)
+    to = to.slice(epoch[0].length)
+  }
+  return from + " to " + to
 }
 
 function listOf(summary, key) {
