@@ -21,8 +21,12 @@ Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, expl
   some of them.
 
 Click "Tell me what changes" and your default agent opens in a terminal with the update
-data. It says what changes for you and what needs action. You can ask it
-follow-up questions there.
+data. It writes a short changelog: what needs action first, then the highlights
+("You can now ..."), the small changes, and the rest in one line. Each change
+says whether it affects your machine. You can ask it follow-up questions there.
+
+To explain package updates well, the plugin adds the upstream release notes to
+the data (see "Release notes" below).
 
 The stock `omarchy.system-update` widget only shows a dot for the Omarchy
 package. This plugin covers more sources, so we recommend you remove the stock
@@ -121,8 +125,18 @@ subscription use. The plugin holds no API key and has no provider setting.
   characters) and reboot hints. The report is cut at 256 KiB.
 - **No update data in a command line.** The agent gets fixed instructions and
   the path of the report file. The update data stays in the file.
-- **No GitHub call by the collector itself.** It runs `checkupdates`,
-  `yay -Qua` and `mise outdated`, as `omarchy update` does. `mise outdated` may
+- **Release notes are fetched when you click, not when the plugin checks.** The
+  check itself runs `checkupdates`, `yay -Qua` and `mise outdated`, as
+  `omarchy update` does. When you click "Tell me what changes", the helper
+  `omarchy-update-explainer-notes` reads the `PKGBUILD` of each package whose
+  version changes (not rebuilds), from the Arch GitLab or the AUR, to find its
+  GitHub project. It then reads the release notes of the new version from the
+  GitHub API. It reads at most 8 packages, keeps at most 1500 characters per
+  package, and caches the result per package and version in
+  `~/.cache/update-explainer/notes`. A package with no GitHub project, or no
+  matching release, gets a line that says so. Unauthenticated GitHub limits are
+  small (60 requests an hour). Set `GITHUB_TOKEN` to raise them.
+  `mise outdated` may
   contact the tool sources, including GitHub, and unauthenticated GitHub limits
   are small. You can turn the dev tool check off with the "Check dev tool
   updates (mise)" setting. The agent looks up commits and pull requests itself.

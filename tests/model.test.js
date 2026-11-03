@@ -153,7 +153,7 @@ test('tooltip in error shows the helper message, not the old summary message', (
 function lines(text) { return text.split('\n') }
 
 test('buildPrompt asks for the sources read and the ones that could not be read', () => {
-  const sourcesLine = lines(Model.buildPrompt(PATH)).find(l => l.startsWith('5. A final line that starts with "Sources:"'))
+  const sourcesLine = lines(Model.buildPrompt(PATH)).find(l => l.startsWith('6. A final line that starts with "Sources:"'))
   assert.ok(sourcesLine, 'sources line missing')
   assert.match(sourcesLine, /lists the sources you read/)
   assert.match(sourcesLine, /and the ones you could not read/)
@@ -306,9 +306,12 @@ test('panelVerdict: error shows the helper message, checking waits, otherwise th
   assert.doesNotMatch(Model.panelVerdict(null, 'checking', '').title, HAS_DIGIT)
 })
 
-test('buildPrompt starts with one decision-first bottom line', () => {
-  assert.ok(lines(Model.buildPrompt(PATH)).includes(
-    '1. ONE bottom line that says one of: install now, it can wait, or it needs attention. Add whether a reboot is needed and how much will be downloaded.'))
+test('buildPrompt starts with a counted headline and a decision', () => {
+  const l = lines(Model.buildPrompt(PATH)).find(x => x.startsWith('1. A bold headline'))
+  assert.ok(l, 'headline line missing')
+  assert.match(l, /counts the lines you actually write/)
+  assert.match(l, /install now, it can wait, or it needs attention/)
+  assert.match(l, /whether a reboot is needed and how much will be downloaded/)
 })
 
 test('buildPrompt asks for a per-change verdict on this machine in plain words', () => {
@@ -318,14 +321,35 @@ test('buildPrompt asks for a per-change verdict on this machine in plain words',
 
 test('buildPrompt says what to do when the facts are not enough', () => {
   assert.ok(lines(Model.buildPrompt(PATH)).includes(
-    'If the file does not give enough facts to judge a change, say "Not sure" and say what is missing. Do not guess.'))
+    'If the file does not give enough facts to judge a change, say "Not sure" and say what is missing. Do not guess. Never invent a feature.'))
 })
 
 test('buildPrompt keeps the group limits and the Sources line last in the list', () => {
   const l = lines(Model.buildPrompt(PATH))
-  assert.strictEqual(l.filter(x => x.startsWith('2. At most 5 bullets')).length, 1)
-  assert.strictEqual(l.filter(x => x.startsWith('3. At most 5 bullets')).length, 1)
-  assert.ok(l.some(x => x.startsWith('5. A final line that starts with "Sources:"')))
+  assert.strictEqual(l.filter(x => x.startsWith('3. HIGHLIGHTS: at most 3 changes')).length, 1)
+  assert.strictEqual(l.filter(x => x.startsWith('4. ALSO NEW:') && x.includes('at most 5')).length, 1)
+  assert.ok(l.some(x => x.startsWith('6. A final line that starts with "Sources:"')))
+})
+
+test('buildPrompt keeps unconfirmed changes out of the highlights', () => {
+  const p = Model.buildPrompt(PATH)
+  assert.match(p, /Only a change that a pull request, a commit subject or release notes in the file confirm may be a highlight/)
+  assert.match(p, /never in Highlights/)
+  assert.match(p, /write no Highlights section/)
+})
+
+test('buildPrompt puts the heads-up right after the headline', () => {
+  const l = lines(Model.buildPrompt(PATH))
+  const head = l.findIndex(x => x.startsWith('1. A bold headline'))
+  const heads = l.findIndex(x => x.startsWith('2. HEADS UP, right after the headline'))
+  assert.ok(head >= 0 && heads > head)
+})
+
+test('buildPrompt uses the release notes section and cites the pull request number', () => {
+  const p = Model.buildPrompt(PATH)
+  assert.match(p, /Release notes section/)
+  assert.match(p, /When a release note is only a link, read that page/)
+  assert.match(p, /pull request number or the project name in brackets/)
 })
 
 test('buildPrompt requires a label at the start of every change line', () => {

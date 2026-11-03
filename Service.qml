@@ -83,6 +83,10 @@ Item {
     return Qt.resolvedUrl("omarchy-update-explainer-collect").toString().replace(/^file:\/\//, "")
   }
 
+  function notesHelperPath() {
+    return Qt.resolvedUrl("omarchy-update-explainer-notes").toString().replace(/^file:\/\//, "")
+  }
+
   function pluginsHelperPath() {
     return Qt.resolvedUrl("omarchy-update-explainer-plugins").toString().replace(/^file:\/\//, "")
   }
@@ -156,19 +160,28 @@ Item {
       data = null
     }
     if (data && data.state === "ok" && typeof data.path === "string" && data.path !== "") {
-      // Outdated plugins add their new commit subjects to the report first.
-      if (checkPlugins && pluginList.length > 0) {
-        appendProcess.command = [pluginsHelperPath(), "--append-report", data.path]
-        appendProcess.reportPath = data.path
-        appendProcess.running = true
-        return
-      }
-      reportDeadline.stop()
-      Quickshell.execDetached(["omarchy-agent-prompt", Model.buildPrompt(data.path)])
+      // The release notes of the new package versions come first, then the
+      // commit subjects of outdated plugins. Each step is optional.
+      notesProcess.command = [notesHelperPath(), "--append-report", data.path]
+      notesProcess.reportPath = data.path
+      notesProcess.running = true
+      return
     } else {
       reportDeadline.stop()
       explainError = data && data.message ? String(data.message) : qsTr("The update report could not be written.")
     }
+    busy = false
+  }
+
+  function finishNotes(path) {
+    if (checkPlugins && pluginList.length > 0) {
+      appendProcess.command = [pluginsHelperPath(), "--append-report", path]
+      appendProcess.reportPath = path
+      appendProcess.running = true
+      return
+    }
+    reportDeadline.stop()
+    Quickshell.execDetached(["omarchy-agent-prompt", Model.buildPrompt(path)])
     busy = false
   }
 
@@ -295,6 +308,24 @@ Item {
       id: pluginsCollector
 
       waitForEnd: true
+    }
+  }
+
+  // Adds the release notes of the new package versions to the report. Without
+  // them the agent still gets the report that was written.
+  Process {
+    id: notesProcess
+
+    property string reportPath: ""
+
+    running: false
+    command: []
+    onExited: function (exitCode) {
+      if (root.reportTimedOut) {
+        root.reportTimedOut = false
+        return
+      }
+      root.finishNotes(reportPath)
     }
   }
 
