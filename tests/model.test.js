@@ -630,3 +630,12 @@ test('a shared epoch is dropped from the version text and a changed one is kept'
   assert.strictEqual(oneRow('1:2.0-1', '2:1.0-1'), '1:2.0-1 to 2:1.0-1')
   assert.strictEqual(oneRow('1.0-1', '1.1-1'), '1.0-1 to 1.1-1')
 })
+
+test('buildPrompt makes each heads-up say what happens, what it means and what to do', () => {
+  const p = Model.buildPrompt(PATH)
+  assert.match(p, /what happens, what it means for the user, and what to do/)
+  assert.match(p, /Never write only that a file is overwritten/)
+  assert.match(p, /the edit is lost/)
+  assert.match(p, /Give one concrete command to back the files up/)
+  assert.match(p, /Never run it/)
+})
