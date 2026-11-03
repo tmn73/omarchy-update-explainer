@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tmn73.update-explainer",
   "name": "Update Explainer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "tmn73",
   "license": "MIT",
   "description": "Pending system updates in the bar, with an explanation from your default agent.",

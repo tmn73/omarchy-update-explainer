@@ -42,7 +42,8 @@ widget (see "Replace the stock update widget" below).
 
 ![The update panel with a pending Omarchy update](preview.png)
 
-The panel, opened from the bar, with an Omarchy update waiting.
+The panel, opened from the bar, with sample data: a summary card, one
+collapsible card for each source, and the buttons fixed at the bottom.
 
 ![The explanation the agent writes after "Tell me what changes"](explain.png)
 
