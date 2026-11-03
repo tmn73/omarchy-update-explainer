@@ -162,7 +162,7 @@ Item {
     if (data && data.state === "ok" && typeof data.path === "string" && data.path !== "") {
       // The release notes of the new package versions come first, then the
       // commit subjects of outdated plugins. Each step is optional.
-      notesProcess.command = [notesHelperPath(), "--append-report", data.path]
+      notesProcess.command = ["timeout", "--kill-after=5", "90", notesHelperPath(), "--append-report", data.path]
       notesProcess.reportPath = data.path
       notesProcess.running = true
       return
@@ -175,7 +175,7 @@ Item {
 
   function finishNotes(path) {
     if (checkPlugins && pluginList.length > 0) {
-      appendProcess.command = [pluginsHelperPath(), "--append-report", path]
+      appendProcess.command = ["timeout", "--kill-after=5", "120", pluginsHelperPath(), "--append-report", path]
       appendProcess.reportPath = path
       appendProcess.running = true
       return
@@ -244,10 +244,11 @@ Item {
 
     interval: Model.REPORT_DEADLINE_MS
     onTriggered: {
-      if (!reportProcess.running && !mkdirProcess.running && !appendProcess.running) return
-      root.reportTimedOut = reportProcess.running || appendProcess.running
+      if (!reportProcess.running && !mkdirProcess.running && !notesProcess.running && !appendProcess.running) return
+      root.reportTimedOut = reportProcess.running || notesProcess.running || appendProcess.running
       mkdirProcess.running = false
       reportProcess.running = false
+      notesProcess.running = false
       appendProcess.running = false
       root.explainError = qsTr("The report took too long and was stopped.")
       root.busy = false

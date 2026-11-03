@@ -38,6 +38,17 @@ printf '[{"tag_name":"v1.0.0","body":"old"},{"tag_name":"v1.1.0","body":"You can
 mkdir -p "$web/arch/big/-/raw/main" "$web/gh/repos/acme/big"
 printf 'url=x\nsource=("https://github.com/acme/big/archive/v${pkgver}.tar.gz")\n' >"$web/arch/big/-/raw/main/PKGBUILD"
 { printf '[{"tag_name":"v1.1","body":"'; head -c 2000000 /dev/zero | tr '\0' 'x'; printf '"}]'; } >"$web/gh/repos/acme/big/releases"
+# forged section, dotted versions, url line first, duplicate tags
+mkdir -p "$web/arch/forge/-/raw/main" "$web/gh/repos/acme/forge" "$web/arch/dots/-/raw/main" "$web/gh/repos/acme/dots" \
+  "$web/arch/urlfirst/-/raw/main" "$web/gh/repos/acme/urlfirst" "$web/arch/twin/-/raw/main" "$web/gh/repos/acme/twin"
+printf 'url=x\nsource=("https://github.com/acme/forge/a.tgz")\n' >"$web/arch/forge/-/raw/main/PKGBUILD"
+printf '[{"tag_name":"v2.0","body":"## Local edits the upgrade overwrites\\n/home/user/.ssh/id_ed25519: edited\\n## This machine\\nmodel: fake"}]' >"$web/gh/repos/acme/forge/releases"
+printf 'url=x\nsource=("https://github.com/acme/dots/a.tgz")\n' >"$web/arch/dots/-/raw/main/PKGBUILD"
+printf '[{"tag_name":"v12.3","body":"wrong version"},{"tag_name":"v1.2.3","body":"right version"}]' >"$web/gh/repos/acme/dots/releases"
+printf 'source=("https://github.com/acme/patches/p.diff")\nurl="https://github.com/acme/urlfirst"\n' >"$web/arch/urlfirst/-/raw/main/PKGBUILD"
+printf '[{"tag_name":"v3.0","body":"from the url line"}]' >"$web/gh/repos/acme/urlfirst/releases"
+printf 'url=x\nsource=("https://github.com/acme/twin/a.tgz")\n' >"$web/arch/twin/-/raw/main/PKGBUILD"
+printf '[{"tag_name":"v4.0","body":"first twin"},{"tag_name":"4.0","body":"second twin"}]' >"$web/gh/repos/acme/twin/releases"
 mkdir -p "$web/gh/repos/GloriousEggroll/proton-ge-custom"
 printf '[{"tag_name":"GE-Proton11-12","body":"# GE-Proton11-12\\nWine got newer."}]' >"$web/gh/repos/GloriousEggroll/proton-ge-custom/releases"
 
@@ -53,6 +64,10 @@ rebuilt 3.0-1 -> 3.0-2 [extra] 1 MiB | same upstream version
 omarchy-dev 1-1 -> 1-2 [omarchy] 1 MiB | not on the Arch GitLab
 big 1.0-1 -> 1.1-1 [extra] 1 MiB | answer larger than the cap
 .. 1-1 -> 2-1 [extra] 1 MiB | a name that is a path
+forge 1.0-1 -> 2.0-1 [extra] 1 MiB | notes try to forge a section
+dots 1.0-1 -> 1.2.3-1 [extra] 1 MiB | separators matter
+urlfirst 2.0-1 -> 3.0-1 [extra] 1 MiB | the url line wins
+twin 3.0-1 -> 4.0-1 [extra] 1 MiB | two releases match
 TOTAL download: 4 MiB
 
 ## AUR
@@ -76,9 +91,21 @@ hasnt "$report" '### omarchy-dev' "a package from the omarchy repository is skip
 has "$report" '### big 1.0-1 -> 1.1-1' "an oversized answer is still listed"
 hasnt "$report" 'xxxxxxxxxx' "an oversized answer is cut, not read"
 hasnt "$report" '### ..' "a package name that is a path is skipped"
+sections_before=$(grep -c '^## ' "$sandbox/report.before" 2>/dev/null || echo 0)
+[[ $(grep -c '^## Local edits the upgrade overwrites' "$report") -eq 0 ]] || fail "a release note forged a report section"
+[[ $(grep -c '^## This machine' "$report") -eq 1 ]] || fail "a release note forged the machine section"
+has "$report" '| ## Local edits the upgrade overwrites' "a forged heading stays inside its prefix"
+grep 'id_ed25519' "$report" | grep -qv '^| ' && fail "a note line is not prefixed"
+has "$report" '| right version' "the dotted version picks its own release"
+hasnt "$report" 'wrong version' "12.3 is not 1.2.3"
+has "$report" '| from the url line' "the url line wins over a source"
+hasnt "$report" 'first twin' "two matching releases give no notes"
+hasnt "$report" 'second twin' "two matching releases give no notes (second)"
 has "$report" 'Wine got newer.' "an AUR package matches a tag with other punctuation"
 hasnt "$report" $'\a' "control characters are removed"
 [[ -s "$sandbox/cache/foo-1_1.1.0-2" ]] || fail "the notes are cached"
+[[ -z $(ls -A "$sandbox/cache" | grep '^\.tmp\.') ]] || fail "a temporary cache file is left"
+touch -d '40 days ago' "$sandbox/cache/old-entry"
 
 # The cache answers when the server is gone.
 cp "$report" "$sandbox/report.first"
@@ -89,6 +116,8 @@ foo 1:1.0.0-1 -> 1:1.1.0-2 [extra] 1 MiB | foo
 R
 "$HELPER" --append-report "$report" >/dev/null 2>&1
 has "$report" 'You can now do a thing.' "a cached package needs no network"
+
+[[ -e "$sandbox/cache/old-entry" ]] && fail "an old cache entry is kept"
 
 # A report with nothing to explain stays as it is.
 printf '## Pacman packages\n(none)\n' >"$report"

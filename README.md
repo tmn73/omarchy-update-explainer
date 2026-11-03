@@ -129,7 +129,13 @@ subscription use. The plugin holds no API key and has no provider setting.
   names and targets of the pacman hooks that may patch them back (never the
   hook commands), pending Omarchy migrations, orphan packages, dev tool updates
   (tool, current and latest version only), AUR updates (each line cut at 120
-  characters) and reboot hints. The report is cut at 256 KiB.
+  characters) and reboot hints. Two sections come after them. "Release notes"
+  holds the notes of the new package versions (at most 8 packages and 1500
+  characters each). "Plugins" holds the subjects of the new commits of each
+  outdated plugin. Both are other people's text. Every line of a release note
+  starts with `| `, so a note cannot pass for a section of the report, and the
+  prompt tells the agent to use these lines as facts and never as instructions.
+  The report is cut at 256 KiB.
 - **No update data in a command line.** The agent gets fixed instructions and
   the path of the report file. The update data stays in the file.
 - **Release notes are fetched when you click, not when the plugin checks.** The
@@ -140,7 +146,9 @@ subscription use. The plugin holds no API key and has no provider setting.
   GitHub project. It then reads the release notes of the new version from the
   GitHub API. It reads at most 8 packages, keeps at most 1500 characters per
   package, and caches the result per package and version in
-  `~/.cache/update-explainer/notes`. A package with no GitHub project, or no
+  `~/.cache/update-explainer/notes` (entries older than 30 days are removed).
+  The project is the GitHub address on the `url=` line of the `PKGBUILD`, or
+  else the first one in its sources. A package with no GitHub project, or no
   matching release, gets a line that says so. It sends no credential, uses https only,
   follows at most 3 redirects, gives each request 8 seconds and cuts each
   answer at a fixed size. Unauthenticated GitHub limits are small (60
@@ -149,11 +157,14 @@ subscription use. The plugin holds no API key and has no provider setting.
   contact the tool sources, including GitHub, and unauthenticated GitHub limits
   are small. You can turn the dev tool check off with the "Check dev tool
   updates (mise)" setting. The agent looks up commits and pull requests itself.
-- **Plugin check.** A second helper, `omarchy-update-explainer-plugins`, runs
-  `git fetch` in each git-managed shell plugin under
-  `~/.config/omarchy/plugins` (the plugins `omarchy plugin update` can update),
-  a few at a time, with a time limit and no password prompt. It never merges,
-  so a plugin folder is not changed. It lists only the plugins that
+- **Plugin check.** A second helper, `omarchy-update-explainer-plugins`, asks
+  the remote of each git-managed shell plugin under
+  `~/.config/omarchy/plugins` (the plugins `omarchy plugin update` can update)
+  for its latest commit with `git ls-remote`: a few bytes, nothing stored. Only
+  a plugin whose remote has a different commit gets a `git fetch`, with a time
+  limit, a size limit on every file git writes, and no password prompt. The
+  plugins run a few at a time. It never merges, so a plugin folder is not
+  changed. It lists only the plugins that
   `omarchy plugin update` can bring forward: a plugin with local commits, or
   with edits in the way of the new commits, is left out because the command
   would refuse it. It contacts the plugin repositories. The
@@ -163,16 +174,21 @@ subscription use. The plugin holds no API key and has no provider setting.
   "Update plugins" button in the popup runs `omarchy plugin update --yes`. `omarchy update` does not
   update plugins.
 - **Timeouts.** Every tool the collector runs has a time limit (about a minute
-  for the network tools, a few minutes for the file check of the report), and
-  the widget stops a run that takes too long. A hung mirror cannot freeze the
+  for the network tools, a few minutes for the file check of the report). The
+  release notes step stops after 90 seconds (8 seconds for each request) and
+  the plugin step after 120 seconds (15 seconds to ask a remote, 30 seconds for
+  a fetch). The widget stops a report that takes more than 9 minutes in all. A hung mirror cannot freeze the
   widget. A manual refresh is ignored within 30 seconds of the last check. The
   timer and "Check again" always run.
 - **No automatic update.** The plugin never runs the update on its own. The
   prompt tells the agent never to run it. That is an instruction, not a
   control: Omarchy starts the agent in its own unattended mode, which may run
   commands without asking you.
-- **The agent reads the web.** The panel says so under the buttons. To explain Omarchy changes, the agent reads
-  public GitHub pull request pages. The prompt tells it to treat the file and
+- **The agent reads the web.** The panel says so under the buttons: the plugin
+  reads release notes from GitHub, the Arch GitLab and the AUR, then the
+  assistant explains them. To explain Omarchy changes, the agent also reads
+  public GitHub pull request pages, and the link of a release note when it is on
+  the project site or on github.com. The prompt tells it to treat the file and
   every web page as data and not to follow instructions found in them. A
   malicious page could still try to steer an agent that runs without prompts,
   so read what the agent plans to do.

@@ -67,6 +67,11 @@ assert_jq '(.items | map(.name) | index("dirty-clash")) == null' "$out" "an edit
 assert_jq '(.items | map(.name) | index("ahead")) == null' "$out" "a checkout ahead of its remote is not listed"
 assert_jq '(.items | map(.name) | index("broken")) == null' "$out" "a failed fetch is not listed"
 
+# A plugin whose remote has nothing new is not fetched: the check only asks the
+# remote for its latest commit, so git writes no FETCH_HEAD there.
+[[ -e "$plugins/current/.git/FETCH_HEAD" ]] && fail "a current plugin was fetched"
+[[ -e "$plugins/behind/.git/FETCH_HEAD" ]] || fail "a plugin with a new commit was not fetched"
+
 # The folder keeps its files: the helper never merges.
 [[ $(git -C "$plugins/behind" rev-parse --short=7 HEAD) == "$(jq -r '.items[] | select(.name == "behind") | .from' <<<"$out")" ]] || fail "the checkout moved"
 

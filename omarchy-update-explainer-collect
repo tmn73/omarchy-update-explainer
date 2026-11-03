@@ -496,7 +496,7 @@ write_report() {
     report_reboot | section "Reboot hints"
   } >"$tmp_report"
   if (( $(stat -c %s "$tmp_report") > report_cap )); then
-    head -c "$report_cap" "$tmp_report" >"$work/cut"
+    head -c "$report_cap" "$tmp_report" | iconv -c -f utf-8 -t utf-8 >"$work/cut"
     printf '\n[truncated: the report was cut at 256 KiB]\n' >>"$work/cut"
     cat "$work/cut" >"$tmp_report"
   fi

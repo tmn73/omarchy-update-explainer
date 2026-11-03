@@ -31,22 +31,38 @@ esac
 plugins_dir=${UPDATE_EXPLAINER_PLUGINS_DIR:-$HOME/.config/omarchy/plugins}
 fetch_timeout=30
 [[ ${UPDATE_EXPLAINER_FETCH_TIMEOUT:-} =~ ^[1-9][0-9]*$ ]] && fetch_timeout=$UPDATE_EXPLAINER_FETCH_TIMEOUT
+ls_timeout=15
+max_fetch_kib=65536
 max_parallel=6
 max_items=20
 
 work=$(mktemp -d) || { echo '{"state":"error","message":"cannot create a temporary folder"}'; exit 0; }
 trap 'rm -rf "$work"' EXIT
-trap 'exit 143' TERM INT HUP
+# Stop the background checks and the git processes inside them.
+stop_children() {
+  local pid
+  for pid in $(jobs -p); do
+    pkill -TERM -P "$pid" 2>/dev/null
+    kill "$pid" 2>/dev/null
+  done
+}
+trap 'stop_children; exit 143' TERM INT HUP
 
-# One plugin: fetch, then write "<from> <to>" to its result file when
-# `omarchy plugin update` can take it: the remote is strictly ahead (a
-# fast-forward), and no file the user edited is touched by the new commits. A
-# plugin with local commits or with edits in the way is left out, because the
-# update command would refuse it. A failed fetch writes nothing.
+# One plugin: ask the remote for its latest commit (a few bytes, nothing is
+# stored). When it is the commit the plugin already has, there is nothing to
+# do. Otherwise fetch, with a size limit on every file git writes, then write
+# "<from> <to>" to the result file when `omarchy plugin update` can take it:
+# the remote is strictly ahead (a fast-forward), and no file the user edited is
+# touched by the new commits. A plugin with local commits or with edits in the
+# way is left out, because the update command would refuse it. A failed
+# request writes nothing.
 check_one() {
-  local id=$1 dir=$2 head fetched
-  timeout --kill-after=5 "$fetch_timeout" git -C "$dir" fetch --quiet origin HEAD 2>/dev/null || return 0
+  local id=$1 dir=$2 head fetched remote
   head=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || return 0
+  remote=$(timeout --kill-after=5 "$ls_timeout" git -C "$dir" ls-remote origin HEAD 2>/dev/null | awk 'NR == 1 { print $1 }')
+  [[ $remote =~ ^[0-9a-f]{40,64}$ ]] || return 0
+  [[ $remote == "$head" ]] && return 0
+  ( ulimit -f "$max_fetch_kib" 2>/dev/null; exec timeout --kill-after=5 "$fetch_timeout" git -C "$dir" fetch --quiet origin HEAD ) 2>/dev/null || return 0
   fetched=$(git -C "$dir" rev-parse FETCH_HEAD 2>/dev/null) || return 0
   [[ $head == "$fetched" ]] && return 0
   git -C "$dir" merge-base --is-ancestor "$head" "$fetched" 2>/dev/null || return 0
@@ -55,7 +71,7 @@ check_one() {
     <(git -C "$dir" diff --name-only HEAD "$fetched" 2>/dev/null | sort)) ]]; then
     return 0
   fi
-  git -C "$dir" log --format=%s -n 10 "$head..$fetched" 2>/dev/null | tr -d '\000-\037\177' | cut -c1-120 >"$work/$id.log"
+  git -C "$dir" log --format=%s -n 10 "$head..$fetched" 2>/dev/null | tr -d '\000-\037\177' | cut -c1-120 | iconv -c -f utf-8 -t utf-8 >"$work/$id.log"
   printf '%s %s\n' "${head:0:7}" "${fetched:0:7}" >"$work/$id"
 }
 
