@@ -314,9 +314,12 @@ test('buildPrompt starts with a counted headline and a decision', () => {
   assert.match(l, /whether a reboot is needed and how much will be downloaded/)
 })
 
-test('buildPrompt asks for a per-change verdict on this machine in plain words', () => {
-  assert.ok(lines(Model.buildPrompt(PATH)).includes(
-    'For every change you list, say in one short clause whether it affects this machine. Judge with the "This machine" section of the file, for example the hardware a change is for against the hardware listed there. Use the plain words "Affects you", "Does not affect you" or "Not sure".'))
+test('buildPrompt marks only the exceptions and never says Affects you', () => {
+  const p = Model.buildPrompt(PATH)
+  assert.ok(lines(p).some(l => l.startsWith('Judge each change against the "This machine" section of the file')))
+  assert.match(p, /A change that affects this machine is a plain line with no label/)
+  assert.match(p, /Mark only the exceptions/)
+  assert.match(p, /Never write "Affects you"/)
 })
 
 test('buildPrompt says what to do when the facts are not enough', () => {
@@ -352,18 +355,19 @@ test('buildPrompt uses the release notes section and cites the pull request numb
   assert.match(p, /pull request number or the project name in brackets/)
 })
 
-test('buildPrompt requires a label at the start of every change line', () => {
-  assert.ok(lines(Model.buildPrompt(PATH)).includes(
-    'Format rule: every change line starts with exactly one of these three labels, followed by a colon: "Affects you:", "Does not affect you:" or "Not sure:". Write the label first, then the change. Do not put the label anywhere else in the line.'))
+test('buildPrompt gives each exception a marker and a bold label', () => {
+  const p = Model.buildPrompt(PATH)
+  assert.match(p, /"\u26aa \*\*Does not affect you:\*\*"/)
+  assert.match(p, /"\ud83d\udfe1 \*\*Not sure:\*\*"/)
 })
 
 test('buildPrompt gives one example line built on neutral data', () => {
   assert.ok(lines(Model.buildPrompt(PATH)).includes(
-    'Example line: - Does not affect you: omarchy-foo 1.0 to 1.1 only changes hardware this machine does not have.'))
+    'Example line: - \u26aa **Does not affect you:** `omarchy-foo` 1.0 to 1.1 only changes hardware this machine does not have.'))
 })
 
-test('buildPrompt says heads-up lines need no label', () => {
-  assert.ok(lines(Model.buildPrompt(PATH)).includes('Heads-up lines do not need a label.'))
+test('buildPrompt says heads-up lines carry no marker and no label', () => {
+  assert.ok(lines(Model.buildPrompt(PATH)).includes('Heads-up lines never carry a marker or a label.'))
 })
 
 test('buildPrompt scopes the per-change rule to the changes you list', () => {
@@ -582,7 +586,7 @@ test('buildPrompt asks for Markdown headings, bold labels and backticked names',
   assert.match(p, /Format the answer as Markdown/)
   assert.match(p, /## .* Heads up/)
   assert.match(p, /## .* Highlights/)
-  assert.match(p, /\*\*Affects you:\*\*/)
+  assert.match(p, /Write each label in bold/)
   assert.match(p, /backticks/)
 })
 
