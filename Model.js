@@ -141,8 +141,6 @@ function verdict(summary) {
            detail: summary.reboot ? "A reboot is needed." : "No reboot needed.", tone: "pending" }
 }
 
-var MAX_ROWS = 4
-
 var DEV_VERSION = /\.g([0-9a-f]{7,})-[0-9]+$/
 
 // "old to new". Dev package versions are long and the shell elides the middle
@@ -191,7 +189,6 @@ function sections(summary) {
     if (src.count <= 0) return
     var rows = listOf(summary, src.id)
       .filter(function (item) { return !(src.id === "pacman" && o.pending && item.name === o.package) })
-      .slice(0, MAX_ROWS)
       .map(function (item) { return { name: item.name, version: versionText(item) } })
     var left = src.count - rows.length
     out.push({ id: src.id, label: src.label, rows: rows, more: left > 0,

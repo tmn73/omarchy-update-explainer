@@ -274,14 +274,14 @@ test('sections puts the Omarchy package in its own section, not twice', () => {
   assert.strictEqual(secs[1].more, false)
 })
 
-test('sections shows at most 4 rows and flags more', () => {
+test('sections lists every item and flags the ones missing from the list', () => {
   const s = summary({
     omarchy: { pending: false, package: '', from: '', to: '' },
     sources: { pacman: 9, aur: 0, mise: 0 },
     items: { pacman: items(5, 'p'), aur: [], mise: [] }
   })
   const sec = Model.sections(s)[0]
-  assert.strictEqual(sec.rows.length, 4)
+  assert.strictEqual(sec.rows.length, 5)
   assert.strictEqual(sec.more, true)
 })
 
@@ -399,15 +399,15 @@ test('sections boundary: exactly 4 items show no "and more"', () => {
   assert.strictEqual(sec.more, false)
 })
 
-test('sections boundary: exactly 5 items show 4 rows and "and more"', () => {
+test('sections boundary: 5 items show 5 rows and no "and more"', () => {
   const s = summary({
     omarchy: { pending: false, package: '', from: '', to: '' },
     sources: { pacman: 5, aur: 0, mise: 0 },
     items: { pacman: items(5, 'p'), aur: [], mise: [] }
   })
   const sec = Model.sections(s)[0]
-  assert.strictEqual(sec.rows.length, 4)
-  assert.strictEqual(sec.more, true)
+  assert.strictEqual(sec.rows.length, 5)
+  assert.strictEqual(sec.more, false)
 })
 
 test('hasUpdates: a held summary with items counts even when the last run failed', () => {
@@ -621,7 +621,7 @@ test('sections carry a badge, a more text and the sections that start open', () 
     sources: { pacman: 7, aur: 1, mise: 0 }, items: { pacman: items(7, 'p'), aur: items(1, 'a'), mise: [] } })
   const secs = Model.sections(s)
   assert.deepStrictEqual(secs.map((x) => [x.id, x.badge, x.open]), [['omarchy', '1', true], ['pacman', '6', true], ['aur', '1', false]])
-  assert.strictEqual(secs[1].moreText, 'and 2 more')
+  assert.strictEqual(secs[1].moreText, '')
   assert.strictEqual(secs[2].moreText, '')
 })
 
