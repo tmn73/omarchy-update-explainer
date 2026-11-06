@@ -261,7 +261,7 @@ fi
 download_partial=false
 (( n_aur + n_mise > 0 )) && download_partial=true
 
-# The first five items of each source, for the panel. Each list is built by jq
+# Every item of each source, for the panel. Each list is built by jq
 # from tab separated lines on stdin, never by string building, and the finished
 # JSON arrays reach the final jq as --argjson values.
 declare -A check_old=()
@@ -278,7 +278,7 @@ pacman_items() {
       old=$(expac -Q '%v' "$name" 2>/dev/null | head -1)
     fi
     printf '%s\t%s\t%s\n' "$name" "$old" "$new"
-  done < <(head -5 "$work/transaction")
+  done <"$work/transaction"
 }
 
 to_items() {
@@ -287,8 +287,8 @@ to_items() {
 }
 
 items_pacman=$(pacman_items | to_items)
-items_aur=$(awk 'NF >= 4 && $3 == "->" { printf "%s\t%s\t%s\n", $1, $2, $4 }' "$work/aur" | head -5 | to_items)
-items_mise=$(awk 'NF >= 4 { printf "%s\t%s\t%s\n", $1, $3, $4 }' "$work/mise" | head -5 | to_items)
+items_aur=$(awk 'NF >= 4 && $3 == "->" { printf "%s\t%s\t%s\n", $1, $2, $4 }' "$work/aur" | to_items)
+items_mise=$(awk 'NF >= 4 { printf "%s\t%s\t%s\n", $1, $3, $4 }' "$work/mise" | to_items)
 
 omarchy_pending=false
 omarchy_pkg=""

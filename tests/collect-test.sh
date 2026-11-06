@@ -344,15 +344,15 @@ items_listed() {
   assert_jq '.sources=={pacman:2,aur:2,mise:2} and .total==6' "$out" "items_listed counts kept"
 }
 
-items_cap() {
+items_all() {
   reset_env
   local lines="" i
   for i in 1 2 3 4 5 6 7; do lines+="pkg$i 1.$i-1 extra 1048576"$'\n'; done
   export STUB_TRANSACTION=${lines%$'\n'}
   export STUB_OLD_VERSIONS="pkg1=0.1-1 pkg2=0.2-1 pkg3=0.3-1 pkg4=0.4-1 pkg5=0.5-1 pkg6=0.6-1 pkg7=0.7-1"
   run_case
-  assert_jq '.sources.pacman==7 and (.items.pacman|length)==5' "$out" "items_cap"
-  assert_jq '.items.pacman[0]=={name:"pkg1",from:"0.1-1",to:"1.1-1"}' "$out" "items_cap expac old version"
+  assert_jq '.sources.pacman==7 and (.items.pacman|length)==7' "$out" "items_all"
+  assert_jq '.items.pacman[0]=={name:"pkg1",from:"0.1-1",to:"1.1-1"}' "$out" "items_all expac old version"
 }
 
 items_hostile() {
@@ -658,7 +658,7 @@ hooks_show_no_exec_line() {
   return 0
 }
 
-for case_name in timeout_background_tools timeout_checkupdates timeout_fakeroot timeout_file_check timeout_env_validated killed_helper_leaves_nothing no_mise_flag report_old_versions_and_descriptions_once report_caps reboot_checks_only_candidates hooks_show_no_exec_line report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_cap items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+for case_name in timeout_background_tools timeout_checkupdates timeout_fakeroot timeout_file_check timeout_env_validated killed_helper_leaves_nothing no_mise_flag report_old_versions_and_descriptions_once report_caps reboot_checks_only_candidates hooks_show_no_exec_line report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_all items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures
