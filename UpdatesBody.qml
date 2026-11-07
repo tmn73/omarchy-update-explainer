@@ -4,8 +4,9 @@ import "Model.js" as Model
 
 // Everything the popup shows about the updates, under the header: the verdict
 // words when nothing waits or the check failed, otherwise the summary card and
-// one collapsible card for each source. Data comes from Model, so this file
-// only lays things out.
+// one collapsible card for each source. Once a report runs in the panel, two
+// tabs switch between the report and the sources. Data comes from Model, so
+// this file only lays things out.
 Column {
   id: root
 
@@ -13,13 +14,26 @@ Column {
   property string status: "checking"
   property string message: ""
   property string fontFamily: Style.font.family
+  // The report in the panel (Service.whatsNew*). `hasReport` is true while it
+  // runs, and when it is done for the updates on screen.
+  property var report: null
+  property string reportPhase: ""
+  property string reportError: ""
+  property bool hasReport: false
+  property string reportStep: ""
+  property real reportStartedAt: 0
+  property string tab: "whatsnew"
 
   readonly property bool hasSummary: summary !== null
   readonly property bool waiting: Model.hasUpdates(summary)
   readonly property var verdictParts: Model.panelVerdict(summary, status, message)
   readonly property var stats: waiting ? Model.stats(summary) : null
+  readonly property bool showReport: waiting && hasReport && tab === "whatsnew"
 
   signal pluginsRequested()
+
+  // A new run shows its report first.
+  onReportPhaseChanged: if (reportPhase === "running") tab = "whatsnew"
 
   spacing: Style.space(14)
 
@@ -42,8 +56,27 @@ Column {
     fontFamily: root.fontFamily
   }
 
+  ViewTabs {
+    width: parent.width
+    visible: root.waiting && root.hasReport
+    current: root.tab
+    fontFamily: root.fontFamily
+    onPicked: function (tab) { root.tab = tab }
+  }
+
+  WhatsNewView {
+    width: parent.width
+    visible: root.showReport
+    report: root.report
+    phase: root.reportPhase
+    error: root.reportError
+    step: root.reportStep
+    startedAt: root.reportStartedAt
+    fontFamily: root.fontFamily
+  }
+
   Repeater {
-    model: root.hasSummary && root.waiting ? Model.sections(root.summary) : []
+    model: root.hasSummary && root.waiting && !root.showReport ? Model.sections(root.summary) : []
 
     delegate: SourceSection {
       required property var modelData

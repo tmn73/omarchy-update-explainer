@@ -367,21 +367,26 @@ report_machine() {
 }
 
 report_pacman() {
-  local name new repo size old desc total=0 line n v
+  local name new repo size old desc total=0 line n v w
   local names=()
-  declare -A oldv=() descv=()
+  declare -A oldv=() descv=() usedby=()
   while read -r name _; do [[ -n $name ]] && names+=("$name"); done <"$work/transaction"
   if (( ${#names[@]} > 0 )) && command -v expac >/dev/null 2>&1; then
     while IFS=$'\t' read -r n v; do oldv[$n]=$v; done < <(expac -Q '%n\t%v' "${names[@]}" 2>/dev/null)
     while IFS=$'\t' read -r n v; do descv[$n]=$v; done < <(expac -S '%n\t%d' "${names[@]}" 2>/dev/null)
+    # A package installed only as a dependency names the packages that need it,
+    # so the agent can say in which app a new feature shows up.
+    while IFS=$'\t' read -r n w v; do
+      [[ $w == dependency && -n $v ]] && usedby[$n]=$(tr -s ' ' ',' <<<"$v" | cut -c1-80)
+    done < <(expac -Q '%n\t%w\t%N' "${names[@]}" 2>/dev/null)
   fi
   while read -r name new repo size; do
     [[ -n $name ]] || continue
     total=$((total + size))
     old=${oldv[$name]:-}
     desc=${descv[$name]:-}
-    printf '%s %s -> %s [%s] %s MiB | %s\n' "$name" "${old:-NEW}" "$new" "$repo" \
-      "$((size / 1048576))" "$desc"
+    printf '%s %s -> %s [%s] %s MiB | %s%s\n' "$name" "${old:-NEW}" "$new" "$repo" \
+      "$((size / 1048576))" "$desc" "${usedby[$name]:+ | used by: ${usedby[$name]}}"
   done <"$work/transaction"
   [[ -s $work/transaction ]] || echo "(none)"
   if [[ $transaction_ok == true ]]; then
@@ -432,14 +437,40 @@ report_local_edits() {
   if timed_out "$qkk_status"; then
     echo "(file check timed out)"
   elif [[ -s $work/modified ]]; then
-    cat "$work/modified"
-    echo "pacman hooks that may patch these back (file name and Target):"
-    local hook target hooks_dir=${UPDATE_EXPLAINER_HOOKS_DIR:-/etc/pacman.d/hooks}
+    local hook target pkg file hooks_dir=${UPDATE_EXPLAINER_HOOKS_DIR:-/etc/pacman.d/hooks}
+    local root=${UPDATE_EXPLAINER_ROOT:-}
+    local hooks=() targets=()
     for hook in "$hooks_dir"/*.hook; do
       [[ -e $hook ]] || continue
       target=$(grep -m1 -E '^Target' "$hook" | sed 's/^Target *= *//')
-      echo "  $(basename "$hook"): $target"
+      [[ -n $target ]] || continue
+      hooks+=("$(basename "$hook")")
+      targets+=("$target")
     done
+    # A file is patched back when a hook Target matches it. Pacman matches a
+    # Target like fnmatch without FNM_PATHNAME, so "*" also crosses "/", as a
+    # bash pattern does. A Target with no wildcard can be a link to the file.
+    while read -r pkg file; do
+      [[ -n $file ]] || continue
+      local covered=false i
+      for i in "${!targets[@]}"; do
+        target=${targets[$i]}
+        # shellcheck disable=SC2053 # the Target is a glob on purpose
+        if [[ ${file#/} == $target ]]; then covered=true; break; fi
+        if [[ $target != *[*?[]* ]]; then
+          local a b
+          a=$(readlink -e "$root/$target") b=$(readlink -e "$root$file")
+          if [[ -n $a && $a == "$b" ]]; then covered=true; break; fi
+        fi
+      done
+      if [[ $covered == true ]]; then
+        echo "$pkg $file [a local pacman hook patches this file back after the upgrade]"
+      else
+        echo "$pkg $file"
+      fi
+    done <"$work/modified"
+    echo "pacman hooks that may patch these back (file name and Target):"
+    for i in "${!hooks[@]}"; do echo "  ${hooks[$i]}: ${targets[$i]}"; done
   else
     echo "(none)"
   fi

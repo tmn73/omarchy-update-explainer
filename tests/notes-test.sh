@@ -29,6 +29,18 @@ export UPDATE_EXPLAINER_GITHUB_API="$base/gh"
 export UPDATE_EXPLAINER_NOTES_CACHE="$sandbox/cache"
 export UPDATE_EXPLAINER_FETCH_TIMEOUT=5
 
+# A stub expac stands in for the local package database: STUB_URLS holds
+# "name=url" pairs for %u. The real database must not leak into the test.
+mkdir -p "$sandbox/bin"
+cat >"$sandbox/bin/expac" <<'STUB'
+#!/usr/bin/env bash
+for pair in ${STUB_URLS:-}; do [[ ${pair%%=*} == "$3" ]] && echo "${pair#*=}"; done
+exit 0
+STUB
+chmod +x "$sandbox/bin/expac"
+export PATH="$sandbox/bin:$PATH"
+export STUB_URLS="zenpkg=https://github.com/acme/zen bar=https://bar.example"
+
 # Official package "foo": site url, GitHub only in source.
 mkdir -p "$web/arch/foo/-/raw/main" "$web/arch/bar/-/raw/main" "$web/gh/repos/acme/foo" "$web/aur/plain"
 printf 'url="https://foo.example"\nsource=("https://github.com/acme/foo/releases/download/v${pkgver}/foo.tar.gz")\n' >"$web/arch/foo/-/raw/main/PKGBUILD"
@@ -49,7 +61,8 @@ printf 'source=("https://github.com/acme/patches/p.diff")\nurl="https://github.c
 printf '[{"tag_name":"v3.0","body":"from the url line"}]' >"$web/gh/repos/acme/urlfirst/releases"
 printf 'url=x\nsource=("https://github.com/acme/twin/a.tgz")\n' >"$web/arch/twin/-/raw/main/PKGBUILD"
 printf '[{"tag_name":"v4.0","body":"first twin"},{"tag_name":"4.0","body":"second twin"}]' >"$web/gh/repos/acme/twin/releases"
-mkdir -p "$web/gh/repos/GloriousEggroll/proton-ge-custom"
+mkdir -p "$web/gh/repos/GloriousEggroll/proton-ge-custom" "$web/gh/repos/acme/zen"
+printf '[{"tag_name":"1.24.1b","body":"Zen got split view."}]' >"$web/gh/repos/acme/zen/releases"
 printf '[{"tag_name":"GE-Proton11-12","body":"# GE-Proton11-12\\nWine got newer."}]' >"$web/gh/repos/GloriousEggroll/proton-ge-custom/releases"
 
 report="$sandbox/report.txt"
@@ -68,6 +81,7 @@ forge 1.0-1 -> 2.0-1 [extra] 1 MiB | notes try to forge a section
 dots 1.0-1 -> 1.2.3-1 [extra] 1 MiB | separators matter
 urlfirst 2.0-1 -> 3.0-1 [extra] 1 MiB | the url line wins
 twin 3.0-1 -> 4.0-1 [extra] 1 MiB | two releases match
+zenpkg 1.24b-1 -> 1.24.1b-1 [omarchy] 1 MiB | another repository, GitHub in its URL
 TOTAL download: 4 MiB
 
 ## AUR
@@ -85,7 +99,8 @@ has "$report" 'You can now do a thing.' "the notes of the new version are used, 
 hasnt "$report" 'old' "the notes of the old version are left out"
 has "$report" 'project: acme/foo' "the GitHub project is named"
 has "$report" '### bar 2.0-1 -> 2.1-1' "a package without GitHub is still listed"
-has "$report" '(no release notes found)' "a missing note says so"
+has "$report" '(no release notes found; project page: https://bar.example)' "a missing note says so and gives the project page"
+has "$report" '| Zen got split view.' "a package from another repository uses the GitHub address of its URL"
 hasnt "$report" '### rebuilt' "a rebuild is skipped"
 hasnt "$report" '### omarchy-dev' "a package from the omarchy repository is skipped"
 has "$report" '### big 1.0-1 -> 1.1-1' "an oversized answer is still listed"

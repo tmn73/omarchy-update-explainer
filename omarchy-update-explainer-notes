@@ -11,7 +11,8 @@
 #
 # The notes are other people's text: control characters are removed, each line
 # is cut at 200 characters, and each package gets at most 1500 characters.
-# At most 8 packages are read. A package and version are fetched once, then
+# At most 30 packages are read. The Omarchy packages are left out: the agent
+# reads their pull requests from the compare line. A package and version are fetched once, then
 # kept in the cache folder.
 # Test hooks: UPDATE_EXPLAINER_NOTES_CACHE (a folder), UPDATE_EXPLAINER_ARCH_RAW,
 # UPDATE_EXPLAINER_AUR_BASE and UPDATE_EXPLAINER_GITHUB_API (base URLs, which
@@ -33,8 +34,8 @@ github_api=${UPDATE_EXPLAINER_GITHUB_API:-https://api.github.com}
 cache_dir=${UPDATE_EXPLAINER_NOTES_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/update-explainer/notes}
 fetch_timeout=8
 [[ ${UPDATE_EXPLAINER_FETCH_TIMEOUT:-} =~ ^[1-9][0-9]*$ ]] && fetch_timeout=$UPDATE_EXPLAINER_FETCH_TIMEOUT
-max_packages=8
-max_parallel=4
+max_packages=30
+max_parallel=6
 max_chars=1500
 cache_days=30
 
@@ -81,20 +82,33 @@ list_packages() {
     /^## /{ section=$0; next }
     section=="## Pacman packages" && NF>=4 && $3=="->" && match($0, /\[[a-z0-9-]+\]/) {
       repo=substr($0, RSTART+1, RLENGTH-2)
-      if (repo=="core"||repo=="extra"||repo=="multilib") print $1 "\t" $2 "\t" $4 "\t" "repo"
+      print $1 "\t" $2 "\t" $4 "\t" ((repo=="core"||repo=="extra"||repo=="multilib") ? "repo" : "other")
     }
     section=="## AUR" && NF>=4 && $3=="->" { print $1 "\t" $2 "\t" $4 "\t" "aur" }
   ' "$report_file" | while IFS=$'\t' read -r name old new source; do
     [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9@._+-]*$ ]] || continue
+    [[ $name == omarchy* ]] && continue
     [[ $(upstream_version "$old") != "$(upstream_version "$new")" ]] || continue
     printf '%s\t%s\t%s\t%s\n' "$name" "$old" "$new" "$source"
   done | head -n "$max_packages"
 }
 
-# github_project <name> <source>: prints owner/repo from the PKGBUILD, or
-# nothing. A GitHub address on the url line wins over one in the sources.
+# home_page <name>: the upstream URL from the local package database, or
+# nothing. It needs no network.
+home_page() {
+  command -v expac >/dev/null 2>&1 || return 0
+  expac -S '%u' "$1" 2>/dev/null | head -n 1 | grep -E '^https://[^[:space:]]+$' | cut -c1-200
+}
+
+# github_project <name> <source>: prints owner/repo, or nothing. A GitHub
+# address in the package URL wins. Then the url line of the PKGBUILD, then one
+# in its sources. A package from another repository (such as [omarchy]) has
+# no PKGBUILD on the Arch GitLab, so only its URL counts.
 github_project() {
   local enc url pkgbuild lines found pattern='github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
+  found=$(home_page "$1" | grep -oE "$pattern" | head -n 1)
+  if [[ -n $found ]]; then sed -E 's#^github\.com/##; s#\.git$##' <<<"$found"; return 0; fi
+  [[ $2 == other ]] && return 0
   enc=$(jq -rn --arg v "$1" '$v|@uri') || return 0
   if [[ $2 == aur ]]; then url="$aur_base/plain/PKGBUILD?h=$enc"; else url="$arch_raw/$enc/-/raw/main/PKGBUILD"; fi
   pkgbuild=$(fetch 131072 "$url") || return 0
@@ -143,7 +157,9 @@ one_package() {
         | iconv -c -f utf-8 -t utf-8 | sed 's/^/| /'
       printf '\n'
     else
-      printf '(no release notes found)\n'
+      local page
+      page=$(home_page "$name")
+      printf '(no release notes found%s)\n' "${page:+; project page: $page}"
     fi
   } >"$work/$idx"
 }
