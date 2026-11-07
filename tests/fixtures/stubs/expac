@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 # Stub: STUB_OLD_VERSIONS="name=ver name=ver", STUB_DESC for descriptions.
-# Formats: %v or %d (one name), %n\t%v or %n\t%d (any number of names).
+# STUB_USED_BY="name=pkg,pkg" marks a package installed as a dependency.
+# Formats: %v or %d (one name), %n\t%v or %n\t%d (any number of names),
+# %n\t%w\t%N (install reason and required-by, two spaces between names).
 mode=$1 fmt=$2
 shift 2
-if [[ $mode == -Q ]]; then
+if [[ $mode == -Q && $fmt == '%n\t%w\t%N' ]]; then
+  for name; do
+    reason=explicit req=""
+    for pair in ${STUB_USED_BY:-}; do
+      if [[ ${pair%%=*} == "$name" ]]; then reason=dependency; req=${pair#*=}; req=${req//,/  }; fi
+    done
+    printf '%s\t%s\t%s\n' "$name" "$reason" "$req"
+  done
+elif [[ $mode == -Q ]]; then
   for name; do
     for pair in ${STUB_OLD_VERSIONS:-}; do
       if [[ ${pair%%=*} == "$name" ]]; then

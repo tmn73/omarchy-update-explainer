@@ -1,6 +1,6 @@
 # Omarchy Update Explainer
 
-Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, explained by your own default agent.
+Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, and what is new in them for you, from your own default agent.
 
 ## What it shows
 
@@ -26,10 +26,24 @@ Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, expl
   icon on or off for each type of update, for people who do not care about
   some of them.
 
-Click "Tell me what changes" and your default agent opens in a terminal with the update
-data. It writes a short changelog: what needs action first, then the highlights
-("You can now ..."), the small changes, and the rest in one line. Each change
-says whether it affects your machine. You can ask it follow-up questions there.
+Click "What's new?" and your default agent reads the update data and the
+release notes. It answers one question: what new things can you use after this
+update? The answer shows in the panel, in a "What's new" tab beside the
+"Packages" tab:
+
+- **A headline** that names the best new thing.
+- **What to do first**, in red cards, only when you must act: a local edit the
+  upgrade overwrites, plugins to update, a reboot. Each card holds one command.
+- **One card for each new feature**: what it does, why it is good, and how to
+  try it (a keybinding, a command or a menu path) when a source gives it.
+- **Smaller changes**, one line each.
+
+Bug fixes, version bumps and changes for hardware you do not have are left out.
+After the report, "Ask about it" reopens the agent's session in a terminal for
+your questions (only for agents that can run without a terminal, see "Agents").
+
+The "Open in a terminal" setting brings back the terminal report: the agent
+opens in a terminal and writes the same answer there, in Markdown.
 
 To explain package updates well, the plugin adds the upstream release notes to
 the data (see "Release notes" below).
@@ -40,14 +54,24 @@ widget (see "Replace the stock update widget" below).
 
 ## Screenshots
 
-![The update panel with a pending Omarchy update](preview.png)
+![The update panel with the What's new report](preview.png)
 
-The panel, opened from the bar, with sample data: a summary card, one
-collapsible card for each source, and the buttons fixed at the bottom.
+The panel, opened from the bar, with the "What's new" report. The data is a
+real report from the author's machine.
 
-![The explanation the agent writes after "Tell me what changes"](explain.png)
+![The report in the panel, first feature open](whats-new.png)
 
-Real output from the author's ROG Zephyrus laptop. The labels say whether each change affects the machine.
+The report as the panel draws it: the headline, one row for each new feature
+(the first one open), then the smaller changes and the list of all changes,
+folded.
+
+![The report while it loads](loading.png)
+
+While the report runs, the panel shows its three steps and a clock.
+
+![The terminal report, with "Open in a terminal" on](explain.png)
+
+The terminal report, from an earlier version of the prompt.
 
 ## Requirements
 
@@ -108,14 +132,18 @@ omarchy plugin remove tmn73.update-explainer
 
 ## Billing and safety
 
-Nothing runs in the background that calls an agent. The agent starts only when
-you click "Tell me what changes", in a terminal you can see. There is no surprise API or
-subscription use. The plugin holds no API key and has no provider setting.
+The agent starts only when you click "What's new?" or "Tell me what changes".
+Nothing calls an agent on a timer. For an agent in the table of `Headless.js`
+(Claude Code today), the report runs with no window: the panel shows "Reading
+the release notes..." until it is done, and the session stays on disk so "Ask
+about it" can reopen it. Any other agent opens in a terminal you can see. The
+plugin holds no API key and has no provider setting.
 
 - **Report file.** It lives in `$XDG_RUNTIME_DIR/update-explainer/report.txt`
   with mode 600. The widget never removes it, so an agent session you keep open
-  can still read it. The next "Tell me what changes" overwrites it, and logout
-  clears the runtime directory.
+  can still read it. The next report overwrites it, and logout clears the
+  runtime directory. The answer for the panel goes to
+  `whats-new-<time>.json` in the same folder, one file for each run.
 - **Hardware facts.** The report starts with a "This machine" section: the
   laptop or board model and vendor, the CPU model, the GPU names, the kernel
   and Omarchy versions, and the session type. The agent uses it to say whether
@@ -130,7 +158,7 @@ subscription use. The plugin holds no API key and has no provider setting.
   hook commands), pending Omarchy migrations, orphan packages, dev tool updates
   (tool, current and latest version only), AUR updates (each line cut at 120
   characters) and reboot hints. Two sections come after them. "Release notes"
-  holds the notes of the new package versions (at most 8 packages and 1500
+  holds the notes of the new package versions (at most 30 packages and 1500
   characters each). "Plugins" holds the subjects of the new commits of each
   outdated plugin. Both are other people's text. Every line of a release note
   starts with `| `, so a note cannot pass for a section of the report, and the
@@ -140,16 +168,19 @@ subscription use. The plugin holds no API key and has no provider setting.
   the path of the report file. The update data stays in the file.
 - **Release notes are fetched when you click, not when the plugin checks.** The
   check itself runs `checkupdates`, `yay -Qua` and `mise outdated`, as
-  `omarchy update` does. When you click "Tell me what changes", the helper
+  `omarchy update` does. When you ask for a report, the helper
   `omarchy-update-explainer-notes` reads the `PKGBUILD` of each package whose
   version changes (not rebuilds), from the Arch GitLab or the AUR, to find its
   GitHub project. It then reads the release notes of the new version from the
-  GitHub API. It reads at most 8 packages, keeps at most 1500 characters per
+  GitHub API. It reads at most 30 packages (the Omarchy packages are left out: the agent reads their pull requests), keeps at most 1500 characters per
   package, and caches the result per package and version in
   `~/.cache/update-explainer/notes` (entries older than 30 days are removed).
-  The project is the GitHub address on the `url=` line of the `PKGBUILD`, or
-  else the first one in its sources. A package with no GitHub project, or no
-  matching release, gets a line that says so. It sends no credential, uses https only,
+  The project is the GitHub address in the package URL of the local package
+  database (no network), else the one on the `url=` line of the `PKGBUILD`, or
+  else the first one in its sources. A package from another repository, such
+  as `[omarchy]`, uses its package URL only. A package with no GitHub project,
+  or no matching release, gets a line that says so, with its project page, and
+  the agent may read that page. It sends no credential, uses https only,
   follows at most 3 redirects, gives each request 8 seconds and cuts each
   answer at a fixed size. Unauthenticated GitHub limits are small (60
   requests an hour), and the cache keeps a package from being fetched twice.
@@ -201,10 +232,14 @@ subscription use. The plugin holds no API key and has no provider setting.
 
 ## Buttons
 
-- **Tell me what changes** writes the report, then runs `omarchy-agent-prompt`
-  with the instructions and the report path. It shows "Preparing the report..."
-  while it works. With no default agent, the button reads "Choose an assistant"
-  and runs `omarchy-menu summon setup.default.agent`.
+- **What's new?** writes the report, then starts the agent with the
+  instructions, the report path and the path of the answer file. It shows
+  "Reading the release notes..." until the answer arrives (at most 10 minutes).
+  When the answer is there, the button reads "Ask about it" (it reopens the
+  session) or "Read them again" (it runs a new report). With "Open in a
+  terminal" on, the button reads "Tell me what changes" and runs
+  `omarchy-agent-prompt` as before. With no default agent, the button reads
+  "Choose an assistant" and runs `omarchy-menu summon setup.default.agent`.
 - **Update now** opens the stock update terminal with
   `omarchy-launch-floating-terminal-with-presentation omarchy-update`. If that
   launcher returns at once, the widget refreshes on the next timer tick instead
@@ -218,7 +253,15 @@ commit count.
 
 ## Agents
 
-Tested with Claude Code on the author's machine (Explain ran end to end). Other agents are untested. The prompt is agent-neutral and only the interactive launch is used, but some agents have limits:
+The prompts are agent-neutral. Omarchy launches agents only in a terminal, so
+`Headless.js` lists the agents whose command line can run one turn and exit:
+today only Claude Code (`claude -p`), tested on the author's machine. Those
+write the panel report with no window, and "Ask about it" reopens their
+session. Every other agent opens in a terminal, writes the same answer file,
+and you ask your questions in that terminal. Add an agent to the table only
+after you ran its command for real.
+
+Other agents are untested. Some have limits:
 
 - `crush` (`crush run`) and `kimi` (`--prompt`) run one-shot, so the window may close with no follow-up.
 - `dsh` and `freebuff` put the prompt on the clipboard instead of starting a session.
@@ -234,11 +277,13 @@ Tested with Claude Code on the author's machine (Explain ran end to end). Other 
 | Show the icon for AUR and dev tool updates | on | on or off |
 | Check plugin updates | on | on or off |
 | Show the icon for plugin updates | on | on or off |
+| Open the update report in a terminal | off | on or off |
 
 The four icon settings only decide when the bar icon shows. The popup always
 lists every update. Change them with the gear in the panel, or with
 `omarchy bar set tmn73.update-explainer <key> <true|false> --json`
-(keys `showOmarchy`, `showSystem`, `showTools`, `showPlugins`).
+(keys `showOmarchy`, `showSystem`, `showTools`, `showPlugins`). The gear
+screen also holds "Open in a terminal" (key `reportInTerminal`).
 
 ## Local development
 
@@ -247,7 +292,7 @@ bash tests/run-all.sh
 ```
 
 This runs the collector test, the QML source checks and `node --test` on
-`Model.js`. The collector test uses stub commands from `tests/fixtures/stubs`
+`Model.js` and `Headless.js`. The collector test uses stub commands from `tests/fixtures/stubs`
 and makes no network call.
 
 QML changes need `omarchy-restart-shell`. The shell keeps the compiled version
@@ -256,10 +301,12 @@ in memory.
 ## How it works
 
 `Service.qml` schedules `omarchy-update-explainer-collect --summary` and reads
-one JSON document from its stdout. On "Tell me what changes" it runs the same helper with
-`--report <file>`, which writes the plain-text report for the agent. `Panel.qml`
-assembles small components. `Model.js` holds the logic worth testing and the
-prompt text.
+one JSON document from its stdout. On "What's new?" it runs the same helper with
+`--report <file>`, which writes the plain-text report for the agent. The agent
+writes its answer as JSON, which `Model.parseWhatsNew` checks and trims before
+`WhatsNewView.qml` draws it. `Panel.qml` assembles small components. `Model.js`
+holds the logic worth testing and the prompt text, `Headless.js` the agents
+that run without a terminal.
 
 A failed refresh never discards a good summary. The panel keeps the last good
 data and shows the error beside it.

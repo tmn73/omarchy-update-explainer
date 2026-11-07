@@ -7,10 +7,9 @@ import "Model.js" as Model
 
 // Bar entry point for the update explainer.
 //
-// This file owns the bar button and the popup layout. Update data and process
-// control belong to Service.qml, source rows to SourceSection.qml, the verdict
-// to VerdictBlock.qml, the buttons to ActionBar.qml, and the wording to
-// Model.js.
+// This file owns the bar button and the popup layout. Update data, the report
+// and process control belong to Service.qml, what the popup shows to
+// UpdatesBody.qml, the buttons to ActionBar.qml, the wording to Model.js.
 Panel {
   id: root
 
@@ -146,7 +145,8 @@ Panel {
           foreground: root.foreground
           fontFamily: root.fontFamily
           types: updates.barTypes
-          onToggled: function (key) { store.toggle(key, true) }
+          reportInTerminal: updates.reportInTerminal
+          onToggled: function (key, fallback) { store.toggle(key, fallback) }
         }
 
         UpdatesBody {
@@ -156,6 +156,12 @@ Panel {
           status: updates.status
           message: updates.message
           fontFamily: root.fontFamily
+          report: updates.whatsNew
+          reportPhase: updates.whatsNewState
+          reportError: updates.whatsNewError
+          hasReport: updates.hasReport
+          reportStep: updates.reportStep
+          reportStartedAt: updates.reportStartedAt
           onPluginsRequested: updates.updatePlugins()
         }
       }
@@ -186,9 +192,11 @@ Panel {
           systemPending: updates.systemPending
           explainError: updates.explainError
           fontFamily: root.fontFamily
+          mode: updates.reportMode
           onExplainRequested: { updates.explain(); root.refocus() }
+          onAskRequested: { updates.ask(); root.refocus() }
           onChooseRequested: { updates.chooseAgent(); root.refocus() }
-          onUpdateRequested: { updates.updateNow(); root.refocus() }
+          onUpdateRequested: { root.close(); updates.updateNow() }
           onRefreshRequested: { updates.refresh(true); root.refocus() }
         }
       }

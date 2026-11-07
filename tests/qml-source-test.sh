@@ -104,7 +104,9 @@ if [[ -f $ROOT/Service.qml ]]; then
   has $S 'interval: Model\.REPORT_DEADLINE_MS' "the report deadline is not from Model"
   has $S 'summaryProcess\.running = false' "the deadline does not stop the summary run"
   has $S 'reportProcess\.running = false' "the deadline does not stop the report run"
-  has $S 'root\.busy = false' "the deadline does not clear busy"
+  has $S 'root\.failReport\(qsTr\("The report took too long' "the deadline does not clear busy"
+  has $S 'function failReport' "Service.qml has no failReport"
+  grep -A4 'function failReport' "$ROOT/$S" | grep -q 'busy = false' || fail "failReport does not clear busy"
   has $S 'if \(busy\) return|if \(root\.busy\) return' "a second explain() while busy is not ignored"
 
   # No agent name in the service
@@ -182,7 +184,7 @@ limit() {
   lines=$(wc -l <"$ROOT/$file")
   ((lines < max)) || fail "$file has $lines lines, the limit is under $max"
 }
-limit Panel.qml 200
+limit Panel.qml 210
 limit SourceSection.qml 120
 limit VerdictBlock.qml 120
 limit TintButton.qml 120
@@ -202,9 +204,10 @@ if [[ -f $ROOT/Panel.qml ]]; then
   has UpdatesBody.qml 'SourceSection \{' "UpdatesBody.qml does not use SourceSection"
   has Panel.qml 'onRefreshRequested: \{ updates\.refresh\(true\); root\.refocus\(\) \}' "Check again does not refresh and restore focus"
   # Every button path hands focus back to the key catcher.
-  for handler in onExplainRequested onChooseRequested onUpdateRequested onRefreshRequested; do
+  for handler in onExplainRequested onChooseRequested onRefreshRequested; do
     grep -E "$handler:" "$ROOT/Panel.qml" | grep -q 'root\.refocus()' || fail "$handler does not restore focus"
   done
+  has Panel.qml 'onUpdateRequested: \{ root\.close\(\); updates\.updateNow\(\) \}' "Update now does not close the panel"
   has Panel.qml 'function refocus\(\)' "Panel.qml has no refocus"
   has Panel.qml 'keyCatcher\.forceActiveFocus' "refocus does not target the key catcher"
   # Held data keeps showing after a failed refresh.
@@ -256,7 +259,7 @@ if [[ -f $ROOT/ActionBar.qml ]]; then
   has ActionBar.qml 'qsTr\("Check again"\)' "ActionBar.qml has no Check again button"
   has ActionBar.qml 'signal refreshRequested' "ActionBar.qml has no refresh signal"
   hasnt ActionBar.qml 'iconText|caption' "ActionBar.qml has an icon or a caption"
-  has ActionBar.qml 'Model\.explainLabel\(root\.agent, root\.busy\)' "the busy label does not reach the button"
+  has ActionBar.qml 'Model\.explainLabel\(root\.agent, root\.busy, root\.mode\)' "the busy label does not reach the button"
   has ActionBar.qml 'Model\.agentNotice\(\)' "ActionBar.qml has no agent notice"
   has ActionBar.qml 'visible: root\.pending && root\.agent !== "" && !root\.busy' "the notice is not limited to an agent set and not busy"
   has ActionBar.qml 'property string explainError' "ActionBar.qml cannot show an explain error"

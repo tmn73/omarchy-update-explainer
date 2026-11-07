@@ -12,8 +12,12 @@ Column {
   // Which types show the bar icon: {omarchy, system, tools, plugins}.
   property var types: ({})
 
-  // `key` is the setting name: showOmarchy, showSystem, showTools or showPlugins.
-  signal toggled(string key)
+  // Where the report goes: false for the panel, true for a terminal.
+  property bool reportInTerminal: false
+
+  // `key` is the setting name: showOmarchy, showSystem, showTools, showPlugins
+  // or reportInTerminal. `fallback` is its value when shell.json has none.
+  signal toggled(string key, bool fallback)
 
   spacing: Style.space(8)
 
@@ -34,7 +38,7 @@ Column {
     fontFamily: root.fontFamily
     label: qsTr("Omarchy")
     checked: root.types.omarchy !== false
-    onActivated: root.toggled("showOmarchy")
+    onActivated: root.toggled("showOmarchy", true)
   }
 
   ToggleRow {
@@ -43,7 +47,7 @@ Column {
     label: qsTr("System packages")
     hint: qsTr("Includes the reboot icon.")
     checked: root.types.system !== false
-    onActivated: root.toggled("showSystem")
+    onActivated: root.toggled("showSystem", true)
   }
 
   ToggleRow {
@@ -51,7 +55,7 @@ Column {
     fontFamily: root.fontFamily
     label: qsTr("AUR and dev tools")
     checked: root.types.tools !== false
-    onActivated: root.toggled("showTools")
+    onActivated: root.toggled("showTools", true)
   }
 
   ToggleRow {
@@ -60,7 +64,7 @@ Column {
     label: qsTr("Plugins")
     hint: qsTr("Shell plugins that are behind their repository.")
     checked: root.types.plugins !== false
-    onActivated: root.toggled("showPlugins")
+    onActivated: root.toggled("showPlugins", true)
   }
 
   Text {
@@ -71,5 +75,32 @@ Column {
     font.family: root.fontFamily
     font.pixelSize: Style.font.caption
     wrapMode: Text.WordWrap
+  }
+
+  // A gap between the two sections.
+  Item {
+    width: 1
+    height: Style.space(10)
+  }
+
+  Text {
+    width: parent.width
+    textFormat: Text.PlainText
+    text: qsTr("The update report")
+    color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.55)
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    font.letterSpacing: 1
+    font.bold: true
+    font.capitalization: Font.AllUppercase
+  }
+
+  ToggleRow {
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+    label: qsTr("Open in a terminal")
+    hint: qsTr("Shows the report here by default. Some assistants still open a terminal to write it.")
+    checked: root.reportInTerminal
+    onActivated: root.toggled("reportInTerminal", false)
   }
 }

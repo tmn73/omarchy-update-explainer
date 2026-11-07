@@ -4,11 +4,10 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Actions at the bottom of the panel. While updates wait: a tinted "Tell me
-// what changes" (or "Choose an assistant" with no default agent) and, for system
-// updates only, a solid "Update now", sharing the row equally. Otherwise an
-// outlined "Check again".
-// Nothing starts on its own, and the agent is never named.
+// Actions at the bottom of the panel. While updates wait: a tinted report
+// button (label from Model.explainLabel, "Choose an assistant" with no agent)
+// and, for system updates only, a solid "Update now", sharing the row
+// equally. Otherwise an outlined "Check again". The agent is never named.
 Column {
   id: root
 
@@ -18,10 +17,13 @@ Column {
   property bool systemPending: true
   property string explainError: ""
   property string fontFamily: Style.font.family
+  // Model.reportMode: "terminal", "panel", "ready" or "ask".
+  property string mode: "terminal"
   // Keyboard cursor: -1 none, then 0 or 1.
   property int cursor: -1
   readonly property int buttonCount: pending && systemPending ? 2 : 1
   signal explainRequested()
+  signal askRequested()
   signal chooseRequested()
   signal updateRequested()
   signal refreshRequested()
@@ -31,6 +33,7 @@ Column {
     if (!pending) refreshRequested()
     else if (busy) return
     else if (agent === "") chooseRequested()
+    else if (mode === "ask") askRequested()
     else explainRequested()
   }
 
@@ -62,7 +65,7 @@ Column {
     TintButton {
       width: buttons.cell
       visible: root.pending
-      text: Model.explainLabel(root.agent, root.busy)
+      text: Model.explainLabel(root.agent, root.busy, root.mode)
       hasCursor: root.cursor === 0
       enabled: !root.busy
       opacity: enabled ? 1 : 0.5

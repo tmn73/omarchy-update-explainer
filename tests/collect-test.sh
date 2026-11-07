@@ -26,7 +26,7 @@ make_sandbox() {
   rm -rf "$sandbox/bin"
   mkdir -p "$sandbox/bin"
   local tool path
-  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls mkdir sleep flock rmdir timeout kill; do
+  for tool in bash cat rm mv mktemp jq date grep head awk tr sed cut sort wc env dirname basename stat chmod ls mkdir sleep flock rmdir timeout kill readlink; do
     path=$(command -v "$tool" 2>/dev/null) && ln -sf "$path" "$sandbox/bin/$tool"
   done
   for tool in checkupdates fakeroot pacman expac yay mise gh lscpu lspci uname; do
@@ -46,9 +46,9 @@ run_case() {
 
 reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
-    STUB_OLD_VERSIONS STUB_DESC STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
+    STUB_OLD_VERSIONS STUB_DESC STUB_USED_BY STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
     STUB_CHECK_LOCKDIR STUB_CHECK_DBLOG STUB_FAKEROOT_LOG \
-    UPDATE_EXPLAINER_LOCK_WAIT UPDATE_EXPLAINER_NET_TIMEOUT UPDATE_EXPLAINER_CHECK_TIMEOUT UPDATE_EXPLAINER_HOOKS_DIR \
+    UPDATE_EXPLAINER_LOCK_WAIT UPDATE_EXPLAINER_NET_TIMEOUT UPDATE_EXPLAINER_CHECK_TIMEOUT UPDATE_EXPLAINER_HOOKS_DIR UPDATE_EXPLAINER_ROOT \
     STUB_YAY_HANG STUB_MISE_HANG STUB_CHECK_HANG STUB_FAKEROOT_HANG STUB_QKK_HANG STUB_QKK STUB_PIDFILE STUB_MISE_LOG STUB_PACMAN_LOG STUB_CPU STUB_KERNEL_RELEASE STUB_OMARCHY_Q UPDATE_EXPLAINER_DMI_DIR XDG_SESSION_TYPE
   export XDG_RUNTIME_DIR="$sandbox/run"
   export TMPDIR="$sandbox/tmp"
@@ -658,7 +658,36 @@ hooks_show_no_exec_line() {
   return 0
 }
 
-for case_name in timeout_background_tools timeout_checkupdates timeout_fakeroot timeout_file_check timeout_env_validated killed_helper_leaves_nothing no_mise_flag report_old_versions_and_descriptions_once report_caps reboot_checks_only_candidates hooks_show_no_exec_line report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_all items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+hooks_mark_patched_files() {
+  report_env
+  mkdir -p "$sandbox/hooks" "$sandbox/root/usr/bin" "$sandbox/root/usr/share/app/bin"
+  : >"$sandbox/root/usr/bin/tool"
+  ln -s ../../../bin/tool "$sandbox/root/usr/share/app/bin/tool"
+  printf '[Trigger]\nTarget = usr/share/shell/*\n' >"$sandbox/hooks/shell.hook"
+  printf '[Trigger]\nTarget = usr/share/app/bin/tool\n' >"$sandbox/hooks/tool.hook"
+  export UPDATE_EXPLAINER_HOOKS_DIR="$sandbox/hooks"
+  export UPDATE_EXPLAINER_ROOT="$sandbox/root"
+  export STUB_QKK=$'warning: app: /usr/share/shell/Commons/Style.qml (Size mismatch)\nwarning: app: /usr/bin/tool (Size mismatch)\nwarning: app: /etc/app.conf (Size mismatch)'
+  run_case
+  local mark="[a local pacman hook patches this file back after the upgrade]"
+  grep -q -F "app: /usr/share/shell/Commons/Style.qml $mark" "$sandbox/report.txt" || fail "hooks: a nested file under a * Target is not marked: $(grep -A5 'Local edits' "$sandbox/report.txt")"
+  grep -q -F "app: /usr/bin/tool $mark" "$sandbox/report.txt" || fail "hooks: a file behind a linked Target is not marked"
+  grep -q -x -F "app: /etc/app.conf" "$sandbox/report.txt" || fail "hooks: a file no hook covers is marked"
+  return 0
+}
+
+report_used_by() {
+  report_env
+  export STUB_TRANSACTION=$'frei0r-plugins 2.0-1 extra 1048576\nfoo 2.0-1 extra 1048576'
+  export STUB_OLD_VERSIONS="frei0r-plugins=1.0-1 foo=1.0-1"
+  export STUB_USED_BY="frei0r-plugins=kdenlive,mlt"
+  run_case
+  grep -q -E '^frei0r-plugins .* \| used by: kdenlive,mlt$' "$sandbox/report.txt" || fail "used by: missing: $(grep frei0r "$sandbox/report.txt")"
+  grep -E '^foo ' "$sandbox/report.txt" | grep -q 'used by' && fail "used by: shown for an explicit package"
+  return 0
+}
+
+for case_name in timeout_background_tools timeout_checkupdates timeout_fakeroot timeout_file_check timeout_env_validated killed_helper_leaves_nothing no_mise_flag report_old_versions_and_descriptions_once report_caps reboot_checks_only_candidates hooks_show_no_exec_line hooks_mark_patched_files report_used_by report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_all items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures
