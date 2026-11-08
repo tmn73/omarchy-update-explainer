@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Run a command and keep at most <bytes> of its standard output.
+#
+# Usage: omarchy-update-explainer-capped <bytes> <command> [arguments...]
+# The panel runs the agent through it: the shell keeps the whole output of a
+# process in memory, and the agent writes text it took from other people's
+# release notes. A stop signal also stops the command and the reader.
+set -uo pipefail
+
+[[ ${1:-} =~ ^[1-9][0-9]*$ && $# -ge 2 ]] || { echo "usage: omarchy-update-explainer-capped <bytes> <command> [arguments...]" >&2; exit 2; }
+max=$1
+shift
+
+"$@" | head -c "$max" &
+pipeline=$!
+trap 'pkill -TERM -P $$ 2>/dev/null; exit 143' TERM INT HUP
+wait "$pipeline"

@@ -68,6 +68,9 @@ Item {
   // The step of a panel report: "collect", "notes" or "agent", and when it
   // started (ms since the epoch). The loading view shows both.
   property string reportStep: ""
+  // A report path that waits for the plugin check to end before its plugin
+  // section is added (finishNotes).
+  property string appendWaiting: ""
   property real reportStartedAt: 0
   readonly property bool whatsNewCurrent: whatsNewKey !== "" && whatsNewKey === Model.updatesKey(shown)
   readonly property bool canAsk: sessionId !== "" && Headless.supports(agent)
@@ -112,6 +115,10 @@ Item {
     return Qt.resolvedUrl("omarchy-update-explainer-notes").toString().replace(/^file:\/\//, "")
   }
 
+  function cappedPath() {
+    return Qt.resolvedUrl("omarchy-update-explainer-capped").toString().replace(/^file:\/\//, "")
+  }
+
   function pluginsHelperPath() {
     return Qt.resolvedUrl("omarchy-update-explainer-plugins").toString().replace(/^file:\/\//, "")
   }
@@ -125,7 +132,9 @@ Item {
       summaryProcess.running = true
       summaryDeadline.restart()
     }
-    if (checkPlugins && !pluginsProcess.running && Model.refreshAllowed(Date.now(), lastRunEndedAt, forced === true)) {
+    // A report that adds the plugin section fetches the same repositories:
+    // the timer waits for it, so two fetches never share one FETCH_HEAD.
+    if (checkPlugins && !pluginsProcess.running && !appendProcess.running && Model.refreshAllowed(Date.now(), lastRunEndedAt, forced === true)) {
       pluginsProcess.command = [pluginsHelperPath()]
       pluginsProcess.running = true
       pluginsDeadline.restart()
@@ -188,6 +197,8 @@ Item {
   }
 
   function startReport() {
+    // A report that waited for a refresh belongs to the updates that refresh found.
+    if (whatsNewState === "running") whatsNewKey = Model.updatesKey(shown)
     mkdirProcess.command = ["mkdir", "-p", "-m", "700", reportDir]
     mkdirProcess.running = true
     reportDeadline.restart()
@@ -221,6 +232,10 @@ Item {
   }
 
   function finishNotes(path) {
+    if (checkPlugins && pluginList.length > 0 && pluginsProcess.running) {
+      appendWaiting = path
+      return
+    }
     if (checkPlugins && pluginList.length > 0) {
       appendProcess.command = ["timeout", "--kill-after=5", "120", pluginsHelperPath(), "--append-report", path]
       appendProcess.reportPath = path
@@ -250,7 +265,7 @@ Item {
     // session id arrive together. A terminal agent stays open for questions,
     // so the panel looks for its file instead.
     if (argv.length > 0) {
-      headlessProcess.command = argv
+      headlessProcess.command = [cappedPath(), String(Model.AGENT_OUTPUT_MAX_BYTES)].concat(argv)
       headlessProcess.running = true
     } else {
       Quickshell.execDetached(["omarchy-agent-prompt", prompt])
@@ -292,7 +307,7 @@ Item {
 
   function updatePlugins() {
     if (pluginUpdateProcess.running) return
-    pluginUpdateProcess.command = ["omarchy-launch-floating-terminal-with-presentation", "omarchy plugin update --yes"]
+    pluginUpdateProcess.command = ["omarchy-launch-floating-terminal-with-presentation", "omarchy plugin update"]
     pluginUpdateProcess.running = true
   }
 
@@ -400,6 +415,11 @@ Item {
       var items = root.pluginsTimedOut ? null : Model.parsePlugins(String(pluginsCollector.text || ""))
       root.pluginsTimedOut = false
       if (items !== null) root.pluginList = items
+      if (root.appendWaiting !== "") {
+        var path = root.appendWaiting
+        root.appendWaiting = ""
+        root.finishNotes(path)
+      }
     }
 
     stdout: StdioCollector {
@@ -451,7 +471,7 @@ Item {
 
     interval: Model.WHATS_NEW_POLL_MS
     repeat: true
-    onTriggered: whatsNewFile.reload()
+    onTriggered: root.readAnswerFile()
   }
 
   Timer {
@@ -464,15 +484,30 @@ Item {
     }
   }
 
-  // The answer file. It does not exist until the agent writes it, so a failed
-  // load only matters once the agent has exited.
-  FileView {
-    id: whatsNewFile
+  // The answer file, read through head so the shell never holds more than
+  // Model.ANSWER_MAX_BYTES. A larger file is cut, does not parse, and counts as
+  // no report. The file does not exist until the agent writes it, so a missing
+  // file only matters once the agent has exited.
+  function readAnswerFile() {
+    if (answerReader.running || whatsNewPath === "") return
+    answerReader.command = ["head", "-c", String(Model.ANSWER_MAX_BYTES), whatsNewPath]
+    answerReader.running = true
+  }
 
-    path: root.whatsNewPath
-    printErrors: false
-    onLoaded: root.readWhatsNew(text())
-    onLoadFailed: function (error) { root.readWhatsNew("") }
+  Process {
+    id: answerReader
+
+    running: false
+    command: []
+    onExited: function (exitCode) {
+      root.readWhatsNew(String(answerCollector.text || ""))
+    }
+
+    stdout: StdioCollector {
+      id: answerCollector
+
+      waitForEnd: true
+    }
   }
 
   // One turn of an agent from the Headless table. It runs in the report
@@ -486,7 +521,7 @@ Item {
     onExited: function (exitCode) {
       root.sessionId = Headless.sessionOf(root.agent, String(headlessCollector.text || ""))
       root.agentExited = true
-      whatsNewFile.reload()
+      root.readAnswerFile()
     }
 
     stdout: StdioCollector {

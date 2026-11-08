@@ -12,10 +12,33 @@
 
 var SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// The tools a report needs, and nothing else. The agent reads remote text
+// (release notes, pull requests), so it runs with no human watching and
+// refuses every other tool ("dontAsk"). It reads only the report folder (its
+// working directory) and /usr, where the files of the Local edits section
+// live. It writes only the answer file: Claude Code checks every file write
+// against "Edit" rules, so a "Write(...)" rule would refuse it. On GitHub it
+// only reads: "gh api" is left out because the same command can also write.
+// --tools removes every other built-in tool (Agent, Grep, Glob...), and
+// --strict-mcp-config with no config loads no MCP server.
+var CLAUDE_BUILTINS = "Read,Write,Edit,WebFetch,Bash"
+var CLAUDE_TOOLS = [
+  "Read(./**)",
+  "Read(//usr/**)",
+  "Edit(./whats-new-*.json)",
+  "WebFetch",
+  "Bash(gh pr view:*)",
+  "Bash(gh pr diff:*)",
+  "Bash(gh pr list:*)",
+  "Bash(gh release view:*)"
+]
+
 var AGENTS = {
   claude: {
     run: function (prompt) {
-      return ["claude", "-p", "--permission-mode", "auto", "--output-format", "json", prompt]
+      return ["claude", "-p", "--permission-mode", "dontAsk", "--tools", CLAUDE_BUILTINS,
+              "--allowedTools", CLAUDE_TOOLS.join(","), "--strict-mcp-config", "--disable-slash-commands",
+              "--output-format", "json", "--", prompt]
     },
     session: function (stdout) {
       try {

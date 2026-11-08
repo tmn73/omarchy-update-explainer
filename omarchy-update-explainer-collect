@@ -9,7 +9,8 @@
 # Usage: omarchy-update-explainer-collect (--summary | --report <file>) [--no-mise]
 #
 # Test hooks (digits only for the timeouts, anything else is ignored):
-# UPDATE_EXPLAINER_NET_TIMEOUT, UPDATE_EXPLAINER_CHECK_TIMEOUT (seconds),
+# UPDATE_EXPLAINER_NET_TIMEOUT, UPDATE_EXPLAINER_CHECK_TIMEOUT,
+# UPDATE_EXPLAINER_QUICK_TIMEOUT (seconds),
 # UPDATE_EXPLAINER_LOCK_WAIT, UPDATE_EXPLAINER_DMI_DIR, UPDATE_EXPLAINER_HOOKS_DIR.
 set -uo pipefail
 
@@ -41,6 +42,11 @@ seconds_or() {
 }
 net_timeout=$(seconds_or "${UPDATE_EXPLAINER_NET_TIMEOUT:-}" 60)
 check_timeout=$(seconds_or "${UPDATE_EXPLAINER_CHECK_TIMEOUT:-}" 180)
+quick_timeout=$(seconds_or "${UPDATE_EXPLAINER_QUICK_TIMEOUT:-}" 30)
+
+# The local queries (expac, pacman -Q, lscpu...) answer in under a second, but
+# a locked or broken database must not hang the helper either.
+quick() { timeout --kill-after=5 "$quick_timeout" "$@"; }
 
 work=$(mktemp -d) || exit 1
 tmp_report=""
@@ -275,7 +281,7 @@ pacman_items() {
     [[ -n $name ]] || continue
     old=${check_old[$name]:-}
     if [[ -z $old ]] && command -v expac >/dev/null 2>&1; then
-      old=$(expac -Q '%v' "$name" 2>/dev/null | head -1)
+      old=$(quick expac -Q '%v' "$name" 2>/dev/null | head -1)
     fi
     printf '%s\t%s\t%s\n' "$name" "$old" "$new"
   done <"$work/transaction"
@@ -299,7 +305,7 @@ if [[ -n $omarchy_pkg ]]; then
   omarchy_pending=true
   new_ver=$(awk -v p="$omarchy_pkg" '$1 == p { print $2; exit }' "$work/transaction")
   if command -v expac >/dev/null 2>&1; then
-    old_ver=$(expac -Q '%v' "$omarchy_pkg" 2>/dev/null | head -1)
+    old_ver=$(quick expac -Q '%v' "$omarchy_pkg" 2>/dev/null | head -1)
   else
     note "expac is not installed, the installed Omarchy version is unknown"
   fi
@@ -348,20 +354,20 @@ report_machine() {
   echo "vendor: ${value:-unknown}"
   value=""
   command -v lscpu >/dev/null 2>&1 &&
-    value=$(lscpu 2>/dev/null | awk -F: '/^Model name/ { sub(/^[ \t]+/, "", $2); print $2; exit }')
+    value=$(quick lscpu 2>/dev/null | awk -F: '/^Model name/ { sub(/^[ \t]+/, "", $2); print $2; exit }')
   echo "cpu: ${value:-unknown}"
   local gpus=""
   command -v lspci >/dev/null 2>&1 &&
-    gpus=$(lspci 2>/dev/null | grep -E '^[^[:space:]]+ (VGA compatible controller|3D controller|Display controller):' |
+    gpus=$(quick lspci 2>/dev/null | grep -E '^[^[:space:]]+ (VGA compatible controller|3D controller|Display controller):' |
       sed -E 's/^[^ ]+ //; s/ \[[0-9a-f]{4}:[0-9a-f]{4}\]//; s/ \(rev [0-9a-f]+\)$//')
   if [[ -n $gpus ]]; then
     while IFS= read -r line; do echo "gpu: $line"; done <<<"$gpus"
   else
     echo "gpu: unknown"
   fi
-  value=$(uname -r 2>/dev/null)
+  value=$(quick uname -r 2>/dev/null)
   echo "kernel: ${value:-unknown}"
-  value=$(pacman -Q omarchy 2>/dev/null || pacman -Q omarchy-dev 2>/dev/null)
+  value=$(quick pacman -Q omarchy 2>/dev/null || quick pacman -Q omarchy-dev 2>/dev/null)
   echo "omarchy: ${value:-unknown}"
   echo "session: ${XDG_SESSION_TYPE:-unknown}"
 }
@@ -372,13 +378,13 @@ report_pacman() {
   declare -A oldv=() descv=() usedby=()
   while read -r name _; do [[ -n $name ]] && names+=("$name"); done <"$work/transaction"
   if (( ${#names[@]} > 0 )) && command -v expac >/dev/null 2>&1; then
-    while IFS=$'\t' read -r n v; do oldv[$n]=$v; done < <(expac -Q '%n\t%v' "${names[@]}" 2>/dev/null)
-    while IFS=$'\t' read -r n v; do descv[$n]=$v; done < <(expac -S '%n\t%d' "${names[@]}" 2>/dev/null)
+    while IFS=$'\t' read -r n v; do oldv[$n]=$v; done < <(quick expac -Q '%n\t%v' "${names[@]}" 2>/dev/null)
+    while IFS=$'\t' read -r n v; do descv[$n]=$v; done < <(quick expac -S '%n\t%d' "${names[@]}" 2>/dev/null)
     # A package installed only as a dependency names the packages that need it,
     # so the agent can say in which app a new feature shows up.
     while IFS=$'\t' read -r n w v; do
       [[ $w == dependency && -n $v ]] && usedby[$n]=$(tr -s ' ' ',' <<<"$v" | cut -c1-80)
-    done < <(expac -Q '%n\t%w\t%N' "${names[@]}" 2>/dev/null)
+    done < <(quick expac -Q '%n\t%w\t%N' "${names[@]}" 2>/dev/null)
   fi
   while read -r name new repo size; do
     [[ -n $name ]] || continue
@@ -478,13 +484,13 @@ report_local_edits() {
 
 report_migrations() {
   local out=""
-  command -v omarchy-migrate >/dev/null 2>&1 && out=$(omarchy-migrate --pending 2>/dev/null)
+  command -v omarchy-migrate >/dev/null 2>&1 && out=$(quick omarchy-migrate --pending 2>/dev/null)
   [[ -n $out ]] && printf '%s\n' "$out" || echo "(none)"
 }
 
 report_orphans() {
   local out
-  out=$(pacman -Qtdq 2>/dev/null)
+  out=$(quick pacman -Qtdq 2>/dev/null)
   [[ -n $out ]] && printf '%s\n' "$out" || echo "(none)"
 }
 
@@ -536,6 +542,11 @@ write_report() {
 if [[ $mode == --report ]]; then
   if write_report && mv -fT "$tmp_report" "$report_file"; then
     tmp_report=""
+    # A new report makes the answers of the earlier ones useless. They are the
+    # agent's answer files of the panel (whats-new-<ms>.json), next to the report.
+    for old_answer in "$(dirname -- "$report_file")"/whats-new-[0-9]*.json; do
+      [[ -f $old_answer && ! -L $old_answer ]] && rm -f -- "$old_answer"
+    done
     emit_report "$report_file"
   else
     jq -n --arg message "cannot write the report to $report_file" '{state: "error", message: $message}'

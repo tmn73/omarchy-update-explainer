@@ -46,7 +46,7 @@ run_case() {
 
 reset_env() {
   unset SKIP STUB_CHECK_EXIT STUB_CHECK_ERR STUB_TRANSACTION STUB_KERNEL_PKG \
-    STUB_OLD_VERSIONS STUB_DESC STUB_USED_BY STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
+    STUB_OLD_VERSIONS STUB_DESC STUB_USED_BY STUB_EXPAC_HANG UPDATE_EXPLAINER_QUICK_TIMEOUT STUB_CHECK_OUT STUB_FAKEROOT_EXIT STUB_AUR STUB_MISE STUB_GH_LOG \
     STUB_CHECK_LOCKDIR STUB_CHECK_DBLOG STUB_FAKEROOT_LOG \
     UPDATE_EXPLAINER_LOCK_WAIT UPDATE_EXPLAINER_NET_TIMEOUT UPDATE_EXPLAINER_CHECK_TIMEOUT UPDATE_EXPLAINER_HOOKS_DIR UPDATE_EXPLAINER_ROOT \
     STUB_YAY_HANG STUB_MISE_HANG STUB_CHECK_HANG STUB_FAKEROOT_HANG STUB_QKK_HANG STUB_QKK STUB_PIDFILE STUB_MISE_LOG STUB_PACMAN_LOG STUB_CPU STUB_KERNEL_RELEASE STUB_OMARCHY_Q UPDATE_EXPLAINER_DMI_DIR XDG_SESSION_TYPE
@@ -687,7 +687,33 @@ report_used_by() {
   return 0
 }
 
-for case_name in timeout_background_tools timeout_checkupdates timeout_fakeroot timeout_file_check timeout_env_validated killed_helper_leaves_nothing no_mise_flag report_old_versions_and_descriptions_once report_caps reboot_checks_only_candidates hooks_show_no_exec_line hooks_mark_patched_files report_used_by report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_all items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
+report_quick_tools_time_out() {
+  report_env
+  export STUB_EXPAC_HANG=1 UPDATE_EXPLAINER_QUICK_TIMEOUT=1
+  local start=$SECONDS
+  run_case
+  (( SECONDS - start < 30 )) || fail "quick timeout: a hung expac held the report $((SECONDS - start)) s"
+  [[ -s $sandbox/report.txt ]] || fail "quick timeout: no report after a hung expac"
+  return 0
+}
+
+report_removes_old_answers() {
+  report_env
+  mkdir -p "$sandbox/keep"
+  : >"$sandbox/whats-new-1794000000000.json"
+  : >"$sandbox/keep/target"
+  ln -sf "$sandbox/keep/target" "$sandbox/whats-new-1794000000001.json"
+  : >"$sandbox/whats-new-notes.json"
+  run_case
+  [[ -e $sandbox/whats-new-1794000000000.json ]] && fail "old answers: an earlier answer file is kept"
+  [[ -L $sandbox/whats-new-1794000000001.json ]] || fail "old answers: a symlink was followed or removed"
+  [[ -e $sandbox/keep/target ]] || fail "old answers: the target of a symlink was removed"
+  [[ -e $sandbox/whats-new-notes.json ]] || fail "old answers: a file outside the pattern was removed"
+  rm -f "$sandbox"/whats-new-*.json
+  return 0
+}
+
+for case_name in timeout_background_tools timeout_checkupdates timeout_fakeroot timeout_file_check timeout_env_validated killed_helper_leaves_nothing no_mise_flag report_old_versions_and_descriptions_once report_caps reboot_checks_only_candidates hooks_show_no_exec_line hooks_mark_patched_files report_used_by report_quick_tools_time_out report_removes_old_answers report_mise_no_paths lock_timeout report_machine_section report_machine_no_identifiers report_machine_unknown report_small_download items_listed items_all items_hostile items_empty items_fallback mise_missing_summary mise_missing_report report_dev_version_refs report_dir_target lock_private_db lock_without_runtime_dir lock_overlapping_runs summary_ok summary_nothing_pending summary_checkupdates_fails \
   summary_tool_missing summary_reboot_kernel summary_hostile_names summary_malformed_line summary_transaction_fails \
   report_sections report_mode_600 report_atomic report_no_github report_hostile_text report_bad_path report_fallback_note; do
   before=$failures

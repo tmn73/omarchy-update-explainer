@@ -139,6 +139,19 @@ the release notes..." until it is done, and the session stays on disk so "Ask
 about it" can reopen it. Any other agent opens in a terminal you can see. The
 plugin holds no API key and has no provider setting.
 
+- **What the windowless agent may do.** It runs with `--permission-mode dontAsk`,
+  so Claude Code refuses every tool that is not on this list: read files in the
+  report folder and under `/usr` (for the Local edits section), write the
+  answer file `whats-new-*.json` and nothing else, fetch web pages, and run
+  `gh pr view`, `gh pr diff`, `gh pr list` and `gh release view`. No other
+  command, no other file, no sub-agent and no MCP server (`--tools`,
+  `--allowedTools`, `--strict-mcp-config`). An agent that opens in a terminal
+  uses your own permission settings. "Ask about it" reopens the session with
+  your own settings too.
+- **Bounded output.** The panel reads at most 256 KiB of the answer file and
+  1 MiB of the agent's output, through `head`. A larger answer counts as no
+  report.
+
 - **Report file.** It lives in `$XDG_RUNTIME_DIR/update-explainer/report.txt`
   with mode 600. The widget never removes it, so an agent session you keep open
   can still read it. The next report overwrites it, and logout clears the
@@ -202,9 +215,10 @@ plugin holds no API key and has no provider setting.
   "Check plugin updates" setting turns it off. When you ask the agent to explain
   the updates, the report also gets the subjects of the new commits of each
   listed plugin (at most 10 per plugin, each cut at 120 characters). The
-  "Update plugins" button in the popup runs `omarchy plugin update --yes`. `omarchy update` does not
+  "Update plugins" button in the popup runs `omarchy plugin update`, which
+  shows the changes of each plugin and asks before it updates it. `omarchy update` does not
   update plugins.
-- **Timeouts.** Every tool the collector runs has a time limit (about a minute
+- **Timeouts.** Every tool the collector runs has a time limit (30 seconds for the local queries, about a minute
   for the network tools, a few minutes for the file check of the report). The
   release notes step stops after 90 seconds (8 seconds for each request) and
   the plugin step after 120 seconds (15 seconds to ask a remote, 30 seconds for
@@ -212,17 +226,19 @@ plugin holds no API key and has no provider setting.
   widget. A manual refresh is ignored within 30 seconds of the last check. The
   timer and "Check again" always run.
 - **No automatic update.** The plugin never runs the update on its own. The
-  prompt tells the agent never to run it. That is an instruction, not a
-  control: Omarchy starts the agent in its own unattended mode, which may run
-  commands without asking you.
+  prompt tells the agent never to run it. For the windowless agent the tool
+  list above enforces it. For an agent in a terminal it is an instruction, not
+  a control: Omarchy starts that agent in its own unattended mode, which may
+  run commands without asking you.
 - **The agent reads the web.** The panel says so under the buttons: the plugin
   reads release notes from GitHub, the Arch GitLab and the AUR, then the
   assistant explains them. To explain Omarchy changes, the agent also reads
   public GitHub pull request pages, and the link of a release note when it is on
   the project site or on github.com. The prompt tells it to treat the file and
   every web page as data and not to follow instructions found in them. A
-  malicious page could still try to steer an agent that runs without prompts,
-  so read what the agent plans to do.
+  malicious page could still try to steer the agent. The windowless agent can
+  then only fetch pages and write its answer. An agent in a terminal can do
+  more, so read what it plans to do.
 - **Private package database.** To avoid a clash with the stock update widget,
   the collector syncs its own copy of the pacman database under
   `$XDG_RUNTIME_DIR/update-explainer` and takes a lock there. The first sync
@@ -291,7 +307,7 @@ screen also holds "Open in a terminal" (key `reportInTerminal`).
 bash tests/run-all.sh
 ```
 
-This runs the collector test, the QML source checks and `node --test` on
+This runs the collector, notes, plugins and capped-output tests, the QML source checks and `node --test` on
 `Model.js` and `Headless.js`. The collector test uses stub commands from `tests/fixtures/stubs`
 and makes no network call.
 

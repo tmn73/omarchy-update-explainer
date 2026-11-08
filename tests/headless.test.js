@@ -33,3 +33,19 @@ test('resumeLine quotes the folder and refuses a bad id', () => {
   assert.strictEqual(Headless.resumeLine('codex', ID, '/run'), '')
   assert.strictEqual(Headless.resumeLine('claude', ID, ''), '')
 })
+
+test('the headless run refuses every tool it does not need', () => {
+  const argv = Headless.runCommand('claude', 'p')
+  const mode = argv[argv.indexOf('--permission-mode') + 1]
+  assert.strictEqual(mode, 'dontAsk')
+  assert.doesNotMatch(argv.join(' '), /\bauto\b|bypassPermissions|dangerously/)
+  const tools = argv[argv.indexOf('--allowedTools') + 1].split(',')
+  assert.ok(tools.includes('Edit(./whats-new-*.json)'), 'file writes are checked against Edit rules')
+  assert.strictEqual(argv[argv.indexOf('--tools') + 1], 'Read,Write,Edit,WebFetch,Bash')
+  assert.ok(argv.includes('--strict-mcp-config'))
+  for (const tool of tools) {
+    assert.doesNotMatch(tool, /^(Bash|Write|Edit|Read)$/, 'a tool with no scope: ' + tool)
+    assert.doesNotMatch(tool, /gh api/, 'gh api can write: ' + tool)
+  }
+  assert.strictEqual(argv[argv.length - 2], '--')
+})

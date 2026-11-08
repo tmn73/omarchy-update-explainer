@@ -3,6 +3,7 @@
 # STUB_USED_BY="name=pkg,pkg" marks a package installed as a dependency.
 # Formats: %v or %d (one name), %n\t%v or %n\t%d (any number of names),
 # %n\t%w\t%N (install reason and required-by, two spaces between names).
+[[ -n ${STUB_EXPAC_HANG:-} ]] && exec sleep 60
 mode=$1 fmt=$2
 shift 2
 if [[ $mode == -Q && $fmt == '%n\t%w\t%N' ]]; then

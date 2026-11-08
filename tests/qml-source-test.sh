@@ -109,6 +109,15 @@ if [[ -f $ROOT/Service.qml ]]; then
   grep -A4 'function failReport' "$ROOT/$S" | grep -q 'busy = false' || fail "failReport does not clear busy"
   has $S 'if \(busy\) return|if \(root\.busy\) return' "a second explain() while busy is not ignored"
 
+  # The panel report: bounded reads, no silent plugin update, no lost report.
+  has $S '"head", "-c", String\(Model\.ANSWER_MAX_BYTES\)' "the answer file is not read through a byte cap"
+  hasnt $S 'FileView' "the answer file is read whole by a FileView"
+  has $S '\[cappedPath\(\), String\(Model\.AGENT_OUTPUT_MAX_BYTES\)\]\.concat\(argv\)' "the agent output has no byte cap"
+  hasnt $S 'plugin update --yes' "Update plugins skips the diff and the confirmation"
+  has $S '"omarchy plugin update"\]' "Update plugins does not run omarchy plugin update"
+  has $S '!pluginsProcess\.running && !appendProcess\.running' "the timer fetches plugins while a report fetches them"
+  grep -A3 'function startReport' "$ROOT/$S" | grep -qF 'whatsNewKey = Model.updatesKey(shown)' || fail "a queued report keeps the key of the old updates"
+
   # No agent name in the service
   hasnt $S 'claude|codex' "Service.qml names an agent"
 
