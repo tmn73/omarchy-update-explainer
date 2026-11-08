@@ -112,6 +112,9 @@ if [[ -f $ROOT/Service.qml ]]; then
   # The panel report: bounded reads, no silent plugin update, no lost report.
   has $S '"head", "-c", String\(Model\.ANSWER_MAX_BYTES\)' "the answer file is not read through a byte cap"
   hasnt $S 'FileView' "the answer file is read whole by a FileView"
+  has $S 'Component\.onCompleted: loadSavedReport\(\)' "a shell reload does not restore the saved report"
+  has $S '"head", "-c", String\(Model\.SAVED_REPORT_MAX_BYTES\)' "the saved report is not read through a byte cap"
+  has $S 'saveReport\(text\)' "a finished report is not saved"
   has $S '\[cappedPath\(\), String\(Model\.AGENT_OUTPUT_MAX_BYTES\)\]\.concat\(argv\)' "the agent output has no byte cap"
   hasnt $S 'plugin update --yes' "Update plugins skips the diff and the confirmation"
   has $S '"omarchy plugin update"\]' "Update plugins does not run omarchy plugin update"

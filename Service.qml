@@ -104,6 +104,8 @@ Item {
   readonly property string runtimeDir: String(Quickshell.env("XDG_RUNTIME_DIR") || "")
   readonly property string reportDir: runtimeDir + "/update-explainer"
   readonly property string reportPath: reportDir + "/report.txt"
+  // The last finished panel report (saveReport, restoreReport).
+  readonly property string savedReportPath: runtimeDir === "" ? "" : reportDir + "/last-report.json"
   // The language of the report (Model.languageOf).
   readonly property string locale: String(Quickshell.env("LC_MESSAGES") || Quickshell.env("LANG") || "")
 
@@ -279,8 +281,43 @@ Item {
   function readWhatsNew(text) {
     if (whatsNewState !== "running") return
     var report = Model.parseWhatsNew(text)
-    if (report) finishWhatsNew(report, "")
-    else if (agentExited) finishWhatsNew(null, qsTr("The assistant did not write the report."))
+    if (report) {
+      finishWhatsNew(report, "")
+      saveReport(text)
+    } else if (agentExited) {
+      finishWhatsNew(null, qsTr("The assistant did not write the report."))
+    }
+  }
+
+  // Keeps the finished report on disk, so a shell reload shows it again. The
+  // text goes through stdin, never through the argument list.
+  function saveReport(answer) {
+    if (savedReportPath === "" || reportSaver.running) return
+    reportSaver.payload = Model.savedReportText(whatsNewKey, sessionId, answer)
+    reportSaver.command = ["dd", "of=" + savedReportPath, "status=none"]
+    reportSaver.stdinEnabled = true
+    reportSaver.running = true
+  }
+
+  function loadSavedReport() {
+    if (savedReportPath === "" || savedReportReader.running) return
+    savedReportReader.command = ["head", "-c", String(Model.SAVED_REPORT_MAX_BYTES), savedReportPath]
+    savedReportReader.running = true
+  }
+
+  Component.onCompleted: loadSavedReport()
+
+  // Shows the saved report after a shell reload. A report started since the
+  // reload wins. whatsNewCurrent still hides it when the updates changed.
+  function restoreReport(text) {
+    if (whatsNewState !== "") return
+    var saved = Model.parseSavedReport(text)
+    if (!saved) return
+    whatsNewKey = saved.key
+    whatsNew = saved.report
+    sessionId = saved.sessionId
+    whatsNewError = ""
+    whatsNewState = "ready"
   }
 
   function finishWhatsNew(report, error) {
@@ -492,6 +529,40 @@ Item {
     if (answerReader.running || whatsNewPath === "") return
     answerReader.command = ["head", "-c", String(Model.ANSWER_MAX_BYTES), whatsNewPath]
     answerReader.running = true
+  }
+
+  // Writes the saved report (saveReport). Closing stdin ends dd.
+  Process {
+    id: reportSaver
+
+    property string payload: ""
+
+    running: false
+    command: []
+    stdinEnabled: false
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+    }
+  }
+
+  // Reads the saved report once, when the service starts. A missing file
+  // gives no output and restores nothing.
+  Process {
+    id: savedReportReader
+
+    running: false
+    command: []
+    onExited: function (exitCode) {
+      root.restoreReport(String(savedReportCollector.text || ""))
+    }
+
+    stdout: StdioCollector {
+      id: savedReportCollector
+
+      waitForEnd: true
+    }
+    stderr: StdioCollector {}
   }
 
   Process {

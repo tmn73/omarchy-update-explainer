@@ -414,6 +414,33 @@ function parseWhatsNew(raw) {
   }
 }
 
+// The last finished report, saved so a shell reload does not lose it. The
+// file keeps the updates key, the agent session and the answer text as the
+// agent wrote it. parseSavedReport reads the answer again with parseWhatsNew.
+// The saved file escapes the answer once more, so its cap is twice the answer cap.
+var SAVED_REPORT_MAX_BYTES = 2 * ANSWER_MAX_BYTES
+
+function savedReportText(key, sessionId, answer) {
+  return JSON.stringify({ key: String(key || ""), sessionId: String(sessionId || ""), answer: String(answer || "") }) + "\n"
+}
+
+// Returns { key, sessionId, report } or null when the file is missing, cut,
+// or holds no valid report.
+function parseSavedReport(raw) {
+  var data
+  try {
+    data = JSON.parse(String(raw || ""))
+  } catch (e) {
+    return null
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null
+  if (typeof data.key !== "string" || data.key === "") return null
+  var report = parseWhatsNew(typeof data.answer === "string" ? data.answer : "")
+  if (!report) return null
+  var sessionId = typeof data.sessionId === "string" ? data.sessionId : ""
+  return { key: data.key, sessionId: sessionId, report: report }
+}
+
 // One string per set of pending updates. A report belongs to the set it was
 // written for, and the panel hides it once the set changes.
 function updatesKey(summary) {
@@ -465,12 +492,15 @@ if (typeof module !== "undefined") {
     buildPrompt: buildPrompt,
     buildPanelPrompt: buildPanelPrompt,
     parseWhatsNew: parseWhatsNew,
+    savedReportText: savedReportText,
+    parseSavedReport: parseSavedReport,
     updatesKey: updatesKey,
     reportMode: reportMode,
     languageOf: languageOf,
     AGENT_DEADLINE_MS: AGENT_DEADLINE_MS,
     WHATS_NEW_POLL_MS: WHATS_NEW_POLL_MS,
     ANSWER_MAX_BYTES: ANSWER_MAX_BYTES,
+    SAVED_REPORT_MAX_BYTES: SAVED_REPORT_MAX_BYTES,
     AGENT_OUTPUT_MAX_BYTES: AGENT_OUTPUT_MAX_BYTES
   }
 }

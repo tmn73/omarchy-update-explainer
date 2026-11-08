@@ -591,6 +591,23 @@ test('parseWhatsNew returns null for a file still being written or a wrong shape
   assert.strictEqual(Model.parseWhatsNew(answer({ headline: '  ' })), null)
 })
 
+test('a saved report reads back with its key and session', () => {
+  const text = Model.savedReportText('pacman:flea@0.4.1-1', 'abc-123', answer())
+  const r = Model.parseSavedReport(text)
+  assert.strictEqual(r.key, 'pacman:flea@0.4.1-1')
+  assert.strictEqual(r.sessionId, 'abc-123')
+  assert.deepStrictEqual(r.report, Model.parseWhatsNew(answer()))
+})
+
+test('parseSavedReport returns null for a missing, cut or keyless file', () => {
+  assert.strictEqual(Model.parseSavedReport(''), null)
+  assert.strictEqual(Model.parseSavedReport('[]'), null)
+  const text = Model.savedReportText('pacman:flea@0.4.1-1', '', answer())
+  assert.strictEqual(Model.parseSavedReport(text.slice(0, 40)), null)
+  assert.strictEqual(Model.parseSavedReport(Model.savedReportText('', '', answer())), null)
+  assert.strictEqual(Model.parseSavedReport(Model.savedReportText('k', '', '{"headline":""}')), null)
+})
+
 test('parseWhatsNew caps the lists, drops bad entries and trims long text', () => {
   const many = Array.from({ length: 9 }, (_, i) => ({ title: 'F' + i }))
   const r = Model.parseWhatsNew(answer({
