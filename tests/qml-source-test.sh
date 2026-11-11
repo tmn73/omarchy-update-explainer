@@ -338,6 +338,15 @@ has Service.qml '"notify-send"' "the report notification has no notify-send fall
 has Service.qml '"omarchy-shell", "-q", "tmn73.update-explainer", "open"' "a click on the notification does not open the popup"
 hasnt Service.qml 'notif.*whatsNew\.(headline|summary|title)' "report text goes into the notification argv"
 
+has Panel.qml 'report: "\\uf15c"' "the report glyph is missing"
+has Panel.qml 'panelOpen: root\.opened' "the service does not know when the popup is open"
+has Panel.qml 'Model\.iconKey\(updates\.shown, updates\.barStatus, updates\.barTypes, updates\.reportMark\)' "the bar glyph ignores the report mark"
+has Panel.qml 'Model\.barVisible\(updates\.barStatus, root\.hasSummary, updates\.lastFailed, updates\.reportMark\)' "the bar item can hide while a report is marked"
+has Panel.qml 'mark: updates\.reportMark' "the bar button does not get the report mark"
+has BarButton.qml 'running: root\.mark === "writing"' "the icon does not pulse while the report is written"
+has BarButton.qml 'root\.mark === "ready" \? Commons\.Color\.accent' "the ready report does not use the accent color"
+hasnt BarButton.qml 'radius: width / 2' "the bar button draws a round dot"
+
 # ---- Result
 
 if ((failures > 0)); then

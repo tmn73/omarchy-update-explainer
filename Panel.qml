@@ -26,13 +26,13 @@ Panel {
   // Nerd Font glyphs. A pending check shows one per update type (Model.kindOf).
   readonly property var glyphs: ({
     current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071",
-    reboot: "\uf01e", omarchy: "\uf0aa", system: "\uf1b2", tools: "\uf121", plugins: "\uf12e", settings: "\uf013"
+    reboot: "\uf01e", omarchy: "\uf0aa", system: "\uf1b2", tools: "\uf121", plugins: "\uf12e", settings: "\uf013", report: "\uf15c"
   })
 
   // True while the popup shows the settings screen.
   property bool settingsOpen: false
   // Empty slot when up to date. Stays visible while the popup is open.
-  visible: root.opened || Model.barVisible(updates.barStatus, root.hasSummary, updates.lastFailed)
+  visible: root.opened || Model.barVisible(updates.barStatus, root.hasSummary, updates.lastFailed, updates.reportMark)
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -62,6 +62,7 @@ Panel {
     id: updates
 
     settings: root.settings
+    panelOpen: root.opened
   }
 
   IpcHandler {
@@ -74,14 +75,14 @@ Panel {
     function status(): string { return updates.status }
   }
 
-  BarIconButton {
+  BarButton {
     id: button
 
     anchors.fill: parent
     bar: root.bar
-    text: root.glyphs[Model.iconKey(updates.shown, updates.barStatus, updates.barTypes)] || root.glyphs.current
-    active: updates.status === "error"
-    opacity: updates.status === "checking" ? 0.5 : 1
+    text: root.glyphs[Model.iconKey(updates.shown, updates.barStatus, updates.barTypes, updates.reportMark)] || root.glyphs.current
+    status: updates.status
+    mark: updates.reportMark
     tooltipText: updates.tooltip
     Accessible.name: updates.tooltip
     onPressed: function (buttonCode) {
