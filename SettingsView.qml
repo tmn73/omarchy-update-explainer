@@ -14,9 +14,12 @@ Column {
 
   // Where the report goes: false for the panel, true for a terminal.
   property bool reportInTerminal: false
+  // The two signals of a panel report: the bar icon and the notification.
+  property bool reportOnIcon: true
+  property bool reportNotify: true
 
-  // `key` is the setting name: showOmarchy, showSystem, showTools, showPlugins
-  // or reportInTerminal. `fallback` is its value when shell.json has none.
+  // `key` is the setting name: showOmarchy, showSystem, showTools, showPlugins,
+  // reportOnIcon, reportNotify or reportInTerminal. `fallback` is its value when shell.json has none.
   signal toggled(string key, bool fallback)
 
   spacing: Style.space(8)
@@ -93,6 +96,24 @@ Column {
     font.letterSpacing: 1
     font.bold: true
     font.capitalization: Font.AllUppercase
+  }
+
+  ToggleRow {
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+    label: qsTr("Show the report on the bar icon")
+    hint: qsTr("The icon pulses while the report is written, then changes until you open this popup.")
+    checked: root.reportOnIcon
+    onActivated: root.toggled("reportOnIcon", true)
+  }
+
+  ToggleRow {
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+    label: qsTr("Notify when the report is ready")
+    hint: qsTr("Sends one notification when the report ends.")
+    checked: root.reportNotify
+    onActivated: root.toggled("reportNotify", true)
   }
 
   ToggleRow {

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tmn73.update-explainer",
   "name": "Update Explainer",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "tmn73",
   "license": "MIT",
   "description": "Pending system updates in the bar, and what is new in them, from your default agent.",
@@ -33,7 +33,9 @@
       "showTools": true,
       "checkPlugins": true,
       "showPlugins": true,
-      "reportInTerminal": false
+      "reportInTerminal": false,
+      "reportOnIcon": true,
+      "reportNotify": true
     },
     "schema": [
       {
@@ -90,6 +92,20 @@
         "label": "Open the update report in a terminal",
         "description": "When off, the report shows in the popup. Some assistants still open a terminal to write it.",
         "defaultValue": false
+      },
+      {
+        "key": "reportOnIcon",
+        "type": "boolean",
+        "label": "Show the report on the bar icon",
+        "description": "The icon pulses while the report is written, then changes until you open the popup.",
+        "defaultValue": true
+      },
+      {
+        "key": "reportNotify",
+        "type": "boolean",
+        "label": "Notify when the report is ready",
+        "description": "Sends one notification when the report ends.",
+        "defaultValue": true
       }
     ]
   }

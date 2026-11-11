@@ -294,12 +294,21 @@ Other agents are untested. Some have limits:
 | Check plugin updates | on | on or off |
 | Show the icon for plugin updates | on | on or off |
 | Open the update report in a terminal | off | on or off |
+| Show the report on the bar icon | on | on or off |
+| Notify when the report is ready | on | on or off |
 
 The four icon settings only decide when the bar icon shows. The popup always
 lists every update. Change them with the gear in the panel, or with
 `omarchy bar set tmn73.update-explainer <key> <true|false> --json`
 (keys `showOmarchy`, `showSystem`, `showTools`, `showPlugins`). The gear
 screen also holds "Open in a terminal" (key `reportInTerminal`).
+
+The report in the popup takes a while, so you can close the popup while it is
+written. "Show the report on the bar icon" (key `reportOnIcon`) makes the icon
+pulse during that time, then show a report icon until you open the popup.
+"Notify when the report is ready" (key `reportNotify`) sends one notification
+when the report ends, and a click on it opens the popup. A report that ends
+while the popup is open gives no signal.
 
 ## Local development
 

@@ -147,6 +147,8 @@ Panel {
           fontFamily: root.fontFamily
           types: updates.barTypes
           reportInTerminal: updates.reportInTerminal
+          reportOnIcon: updates.reportOnIcon
+          reportNotify: updates.reportNotify
           onToggled: function (key, fallback) { store.toggle(key, fallback) }
         }
 

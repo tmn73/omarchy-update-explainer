@@ -347,6 +347,14 @@ has BarButton.qml 'running: root\.mark === "writing"' "the icon does not pulse w
 has BarButton.qml 'root\.mark === "ready" \? Commons\.Color\.accent' "the ready report does not use the accent color"
 hasnt BarButton.qml 'radius: width / 2' "the bar button draws a round dot"
 
+has SettingsView.qml 'toggled\("reportOnIcon", true\)' "the icon setting has no toggle"
+has SettingsView.qml 'toggled\("reportNotify", true\)' "the notification setting has no toggle"
+has Panel.qml 'reportOnIcon: updates\.reportOnIcon' "the settings screen does not get reportOnIcon"
+has Panel.qml 'reportNotify: updates\.reportNotify' "the settings screen does not get reportNotify"
+has manifest.json '"version": "0\.4\.0"' "the version is not 0.4.0"
+has manifest.json '"reportOnIcon": true' "the manifest has no reportOnIcon default"
+has manifest.json '"reportNotify": true' "the manifest has no reportNotify default"
+
 # ---- Result
 
 if ((failures > 0)); then
