@@ -26,7 +26,7 @@ Panel {
   // Nerd Font glyphs. A pending check shows one per update type (Model.kindOf).
   readonly property var glyphs: ({
     current: "\uf021", pending: "\uf021", checking: "\uf021", error: "\uf071",
-    reboot: "\uf01e", omarchy: "\uf0aa", system: "\uf1b2", tools: "\uf121", plugins: "\uf12e", settings: "\uf013", report: "\uf15c"
+    reboot: "\uf01e", omarchy: "\uf0aa", system: "\uf1b2", tools: "\uf121", plugins: "\uf12e", settings: "\uf013", report: "\uf15c", writing: "\uf1ce"
   })
 
   // True while the popup shows the settings screen.

@@ -729,7 +729,7 @@ test('reportMark: empty without a report', () => {
 test('iconKey: the mark picks the report and error glyphs', () => {
   assert.strictEqual(Model.iconKey(summary(), 'pending', {}, 'ready'), 'report')
   assert.strictEqual(Model.iconKey(summary(), 'pending', {}, 'failed'), 'error')
-  assert.strictEqual(Model.iconKey(summary(), 'pending', {}, 'writing'), Model.iconKey(summary(), 'pending', {}))
+  assert.strictEqual(Model.iconKey(summary(), 'pending', {}, 'writing'), 'writing')
   assert.strictEqual(Model.iconKey(summary(), 'pending', {}, ''), Model.iconKey(summary(), 'pending', {}))
 })
 

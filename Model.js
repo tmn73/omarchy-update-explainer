@@ -134,9 +134,11 @@ function reportSignals(panelOpen, current, notifyEnabled) {
   return { unread: unread, notify: unread && current === true && notifyEnabled === true }
 }
 
-// The key of the bar glyph. An unread report wins, then checking and error
-// win over the update type. A report being written keeps the glyph.
+// The key of the bar glyph. A report mark wins: a spinner while the report is
+// written, the report glyph once it is ready, the error glyph if it failed.
+// Then checking and error win over the update type.
 function iconKey(summary, status, show, mark) {
+  if (mark === "writing") return "writing"
   if (mark === "ready") return "report"
   if (mark === "failed") return "error"
   if (status !== "pending") return status

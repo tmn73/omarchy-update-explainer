@@ -8,29 +8,29 @@ import qs.Ui
 //
 // `status` is the update check: "checking" dims the icon, "error" paints it in
 // the urgent color. `mark` is the panel report (Model.reportMark): "writing"
-// makes the icon pulse, "ready" paints it in the accent color, "failed" in the
-// urgent color.
+// makes the icon spin in the accent color, "ready" paints it in the accent
+// color, "failed" in the urgent color.
 BarIconButton {
   id: root
 
   property string status: ""
   property string mark: ""
-  // The opacity while a report is written. It is a property of its own, so the
-  // opacity binding below survives the animation.
-  property real pulse: 1
 
   // The shell paints an active button in its urgent color. A report that is
-  // ready is good news, so it takes the accent color.
-  active: root.status === "error" || root.mark === "ready" || root.mark === "failed"
-  activeColor: root.mark === "ready" ? Commons.Color.accent : (root.bar ? root.bar.urgent : Commons.Color.urgent)
-  opacity: root.mark === "writing" ? root.pulse : (root.status === "checking" ? 0.5 : 1)
+  // being written or is ready is not an alert, so it takes the accent color.
+  active: root.status === "error" || root.mark !== ""
+  activeColor: root.mark === "ready" || root.mark === "writing" ? Commons.Color.accent : (root.bar ? root.bar.urgent : Commons.Color.urgent)
+  opacity: root.status === "checking" ? 0.5 : 1
 
-  SequentialAnimation on pulse {
-    running: root.mark === "writing"
+  // A spinning glyph reads at a glance, where a dimmed one went unnoticed.
+  // The glyph turns back to rest when the report ends or motion is reduced.
+  RotationAnimation on textRotation {
+    from: 0
+    to: 360
+    duration: Style.duration(1100)
     loops: Animation.Infinite
-    onStopped: root.pulse = 1
-
-    NumberAnimation { to: 0.3; duration: 900; easing.type: Easing.InOutSine }
-    NumberAnimation { to: 1; duration: 900; easing.type: Easing.InOutSine }
+    running: root.mark === "writing" && !Style.reduceMotion
+    // A stopped animation keeps its angle, so the next glyph would sit tilted.
+    onRunningChanged: if (!running) root.textRotation = 0
   }
 }
