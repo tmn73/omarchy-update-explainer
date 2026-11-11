@@ -336,6 +336,10 @@ has Service.qml 'onPanelOpenChanged' "opening the popup does not clear the unrea
 has Service.qml 'omarchy-notification-send' "the report notification does not use the Omarchy notifier"
 has Service.qml '"notify-send"' "the report notification has no notify-send fallback"
 has Service.qml '"omarchy-shell", "-q", "tmn73.update-explainer", "open"' "a click on the notification does not open the popup"
+has Service.qml 'Model\.reportSignals\(panelOpen, whatsNewCurrent, reportNotify\)' "the report signals are not decided in Model"
+hasnt Service.qml 'if \(!panelOpen\)' "Service.qml decides the report signals itself"
+has Service.qml 'notice\.plainBody\]' "the notify-send fallback tells the user to click"
+has Service.qml 'if \(whatsNewState === "running"\) whatsNewState = ""' "a report that moves to a terminal leaves the panel report running"
 hasnt Service.qml 'notif.*whatsNew\.(headline|summary|title)' "report text goes into the notification argv"
 
 has Panel.qml 'report: "\\uf15c"' "the report glyph is missing"

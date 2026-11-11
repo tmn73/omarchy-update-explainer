@@ -8,7 +8,8 @@ Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, and 
   check runs, or after an error). When you are up to date, the bar slot is
   empty. The icon never shows a number. Its glyph follows the most urgent type
   of update: reboot needed, Omarchy, system packages, AUR or dev tools, then
-  plugins.
+  plugins. While the report is written the icon pulses, and a finished report
+  that you have not opened shows a report icon (see Settings).
 - **A summary card** at the top of the panel: how many updates wait, a
   "Reboot needed" flag, one chip for each source that has updates, and the
   download size ("At least" when AUR packages or dev tools wait, because their

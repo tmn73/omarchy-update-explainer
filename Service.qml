@@ -267,6 +267,9 @@ Item {
     reportDeadline.stop()
     if (reportInTerminal) {
       Quickshell.execDetached(["omarchy-agent-prompt", Model.buildPrompt(path, locale)])
+      // The setting changed while a panel report collected its data. The
+      // report goes to the terminal, so the panel report ends here.
+      if (whatsNewState === "running") whatsNewState = ""
       busy = false
       return
     }
@@ -339,10 +342,9 @@ Item {
     whatsNewError = error
     whatsNewState = report ? "ready" : "error"
     busy = false
-    if (!panelOpen) {
-      reportUnread = true
-      if (reportNotify) notifyReport(report !== null)
-    }
+    var signals = Model.reportSignals(panelOpen, whatsNewCurrent, reportNotify)
+    reportUnread = signals.unread
+    if (signals.notify) notifyReport(report !== null)
   }
 
   readonly property string notifier: Quickshell.env("OMARCHY_PATH")
@@ -355,7 +357,7 @@ Item {
     var notice = Model.reportNotice(ok)
     var primary = [notifier, "-g", "\uf15c", "-u", "normal", notice.title, notice.body,
       "--exec", "omarchy-shell", "-q", "tmn73.update-explainer", "open"]
-    var fallback = ["notify-send", "--app-name=Update Explainer", "-u", "normal", "--", notice.title, notice.body]
+    var fallback = ["notify-send", "--app-name=Update Explainer", "-u", "normal", "--", notice.title, notice.plainBody]
     senderComponent.createObject(root, { command: primary, fallback: fallback, running: true })
   }
 

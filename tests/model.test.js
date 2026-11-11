@@ -747,6 +747,26 @@ test('tooltip: the mark wins over the update list', () => {
 })
 
 test('reportNotice: fixed text for both outcomes', () => {
-  assert.deepStrictEqual(Model.reportNotice(true), { title: 'Update report ready', body: 'Click to see what is new.' })
-  assert.deepStrictEqual(Model.reportNotice(false), { title: 'The update report failed', body: 'Click to see why.' })
+  assert.deepStrictEqual(Model.reportNotice(true), {
+    title: 'Update report ready', body: 'Click to see what is new.', plainBody: 'Open the update popup to read it.'
+  })
+  assert.deepStrictEqual(Model.reportNotice(false), {
+    title: 'The update report failed', body: 'Click to see why.', plainBody: 'Open the update popup to see why.'
+  })
+})
+
+test('reportSignals: popup closed, report current, setting on gives both signals', () => {
+  assert.deepStrictEqual(Model.reportSignals(false, true, true), { unread: true, notify: true })
+})
+
+test('reportSignals: no signal when the popup is open', () => {
+  assert.deepStrictEqual(Model.reportSignals(true, true, true), { unread: false, notify: false })
+})
+
+test('reportSignals: no notification when the report is for other updates', () => {
+  assert.deepStrictEqual(Model.reportSignals(false, false, true), { unread: true, notify: false })
+})
+
+test('reportSignals: no notification when the setting is off', () => {
+  assert.deepStrictEqual(Model.reportSignals(false, true, false), { unread: true, notify: false })
 })

@@ -117,11 +117,21 @@ function reportMark(state, current, unread, enabled) {
 }
 
 // The notification for a report that ended. Fixed text only: nothing from the
-// report goes into a command line.
+// report goes into a command line. `body` is for a notification that opens the
+// popup on a click, `plainBody` for one that has no click action.
 function reportNotice(ok) {
   return ok
-    ? { title: "Update report ready", body: "Click to see what is new." }
-    : { title: "The update report failed", body: "Click to see why." }
+    ? { title: "Update report ready", body: "Click to see what is new.", plainBody: "Open the update popup to read it." }
+    : { title: "The update report failed", body: "Click to see why.", plainBody: "Open the update popup to see why." }
+}
+
+// The signals for a report that just ended. `unread` starts the mark on the
+// bar icon, `notify` sends the notification. A report that ends while the
+// popup is open gives none. A report for other updates than the ones pending
+// now sends no notification: the popup would not show it.
+function reportSignals(panelOpen, current, notifyEnabled) {
+  var unread = !panelOpen
+  return { unread: unread, notify: unread && current === true && notifyEnabled === true }
 }
 
 // The key of the bar glyph. An unread report wins, then checking and error
@@ -503,6 +513,7 @@ if (typeof module !== "undefined") {
     iconKey: iconKey,
     reportMark: reportMark,
     reportNotice: reportNotice,
+    reportSignals: reportSignals,
     tooltip: tooltip,
     barVisible: barVisible,
     verdict: verdict,
