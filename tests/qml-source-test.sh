@@ -327,6 +327,17 @@ jq -e '.barWidget.schema | map(select(.key == "checkMise" and .type == "boolean"
   "$ROOT/manifest.json" >/dev/null || fail "manifest.json has no boolean checkMise setting that defaults to true"
 jq -e '.barWidget.defaults.checkMise == true' "$ROOT/manifest.json" >/dev/null || fail "manifest.json defaults lack checkMise"
 
+# ---- Report mark and notification
+
+has Service.qml 'boolSetting\("reportOnIcon", true\)' "reportOnIcon does not default to true"
+has Service.qml 'boolSetting\("reportNotify", true\)' "reportNotify does not default to true"
+has Service.qml 'Model\.reportMark\(whatsNewState, whatsNewCurrent, reportUnread, reportOnIcon\)' "the report mark is not derived in Model"
+has Service.qml 'onPanelOpenChanged' "opening the popup does not clear the unread report"
+has Service.qml 'omarchy-notification-send' "the report notification does not use the Omarchy notifier"
+has Service.qml '"notify-send"' "the report notification has no notify-send fallback"
+has Service.qml '"omarchy-shell", "-q", "tmn73.update-explainer", "open"' "a click on the notification does not open the popup"
+hasnt Service.qml 'notif.*whatsNew\.(headline|summary|title)' "report text goes into the notification argv"
+
 # ---- Result
 
 if ((failures > 0)); then

@@ -58,6 +58,16 @@ Item {
   // "error". The report belongs to the updates it was written for
   // (whatsNewKey), so it stops showing when they change.
   readonly property bool reportInTerminal: boolSetting("reportInTerminal", false)
+  // The two signals of a panel report: the mark on the bar icon and the
+  // notification when it ends.
+  readonly property bool reportOnIcon: boolSetting("reportOnIcon", true)
+  readonly property bool reportNotify: boolSetting("reportNotify", true)
+  // Set by the panel. A report that ends while the popup is open needs no signal.
+  property bool panelOpen: false
+  // True from the end of a report until the user opens the popup. A report
+  // restored after a shell reload never sets it.
+  property bool reportUnread: false
+  onPanelOpenChanged: if (panelOpen) reportUnread = false
   property var whatsNew: null
   property string whatsNewState: ""
   property string whatsNewError: ""
@@ -75,6 +85,7 @@ Item {
   readonly property bool whatsNewCurrent: whatsNewKey !== "" && whatsNewKey === Model.updatesKey(shown)
   readonly property bool canAsk: sessionId !== "" && Headless.supports(agent)
   readonly property bool hasReport: whatsNewCurrent && whatsNewState !== ""
+  readonly property string reportMark: Model.reportMark(whatsNewState, whatsNewCurrent, reportUnread, reportOnIcon)
   readonly property string reportMode: Model.reportMode(reportInTerminal, whatsNewCurrent && whatsNewState === "ready", canAsk)
 
   function setting(name, fallback) {
@@ -97,7 +108,7 @@ Item {
   readonly property bool systemPending: Model.hasUpdates(summary)
   readonly property string status: Model.statusOf(shown, runState)
   readonly property string barStatus: Model.barStatus(shown, status, barTypes)
-  readonly property string tooltip: Model.tooltip(shown, status, message)
+  readonly property string tooltip: Model.tooltip(shown, status, message, reportMark)
 
   // Empty when the session has no runtime directory. Nothing is written then:
   // a fixed path in a shared folder would invite symlink and squatting tricks.
@@ -185,6 +196,7 @@ Item {
     whatsNewError = ""
     sessionId = ""
     agentExited = false
+    reportUnread = false
     whatsNewState = "running"
     reportStep = "collect"
     reportStartedAt = Date.now()
@@ -327,6 +339,43 @@ Item {
     whatsNewError = error
     whatsNewState = report ? "ready" : "error"
     busy = false
+    if (!panelOpen) {
+      reportUnread = true
+      if (reportNotify) notifyReport(report !== null)
+    }
+  }
+
+  readonly property string notifier: Quickshell.env("OMARCHY_PATH")
+    ? Quickshell.env("OMARCHY_PATH") + "/bin/omarchy-notification-send"
+    : "omarchy-notification-send"
+
+  // One notification for a report that ended. A click opens the popup. The
+  // text is fixed (Model.reportNotice), and `--exec` with its argv is last.
+  function notifyReport(ok) {
+    var notice = Model.reportNotice(ok)
+    var primary = [notifier, "-g", "\uf15c", "-u", "normal", notice.title, notice.body,
+      "--exec", "omarchy-shell", "-q", "tmn73.update-explainer", "open"]
+    var fallback = ["notify-send", "--app-name=Update Explainer", "-u", "normal", "--", notice.title, notice.body]
+    senderComponent.createObject(root, { command: primary, fallback: fallback, running: true })
+  }
+
+  Component {
+    id: senderComponent
+
+    // One process per notification, gone once it exits. A command that cannot
+    // start at all (no omarchy-notification-send here) reports running=false
+    // without ever having started, and the fallback runs then.
+    Process {
+      property var fallback: null
+      property bool began: false
+
+      onStarted: began = true
+      onRunningChanged: {
+        if (running) return
+        if (!began && fallback) senderComponent.createObject(root, { command: fallback, running: true })
+        destroy()
+      }
+    }
   }
 
   // Reopens the session that wrote the report, in a terminal, for questions.
