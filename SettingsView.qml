@@ -102,7 +102,7 @@ Column {
     foreground: root.foreground
     fontFamily: root.fontFamily
     label: qsTr("Show the report on the bar icon")
-    hint: qsTr("The icon pulses while the report is written, then changes until you open this popup.")
+    hint: qsTr("The icon spins while the report is written, then changes until you open this popup.")
     checked: root.reportOnIcon
     onActivated: root.toggled("reportOnIcon", true)
   }

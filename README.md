@@ -8,7 +8,7 @@ Pending Omarchy, system, AUR, dev tool and shell plugin updates in the bar, and 
   check runs, or after an error). When you are up to date, the bar slot is
   empty. The icon never shows a number. Its glyph follows the most urgent type
   of update: reboot needed, Omarchy, system packages, AUR or dev tools, then
-  plugins. While the report is written the icon pulses, and a finished report
+  plugins. While the report is written the icon spins, and a finished report
   that you have not opened shows a report icon (see Settings).
 - **A summary card** at the top of the panel: how many updates wait, a
   "Reboot needed" flag, one chip for each source that has updates, and the
@@ -306,7 +306,7 @@ screen also holds "Open in a terminal" (key `reportInTerminal`).
 
 The report in the popup takes a while, so you can close the popup while it is
 written. "Show the report on the bar icon" (key `reportOnIcon`) makes the icon
-pulse during that time, then show a report icon until you open the popup.
+spin during that time, then show a report icon until you open the popup.
 "Notify when the report is ready" (key `reportNotify`) sends one notification
 when the report ends, and a click on it opens the popup. A report that ends
 while the popup is open gives no signal.
