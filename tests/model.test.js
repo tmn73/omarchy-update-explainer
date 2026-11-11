@@ -697,3 +697,56 @@ test('parseWhatsNew reads the list of all changes and checks the fit', () => {
   ])
   assert.deepStrictEqual(Model.parseWhatsNew(answer()).changes, [])
 })
+
+// ---- The bar mark of a panel report
+
+test('reportMark: writing while a report runs', () => {
+  assert.strictEqual(Model.reportMark('running', true, false, true), 'writing')
+})
+
+test('reportMark: ready and failed only while unread', () => {
+  assert.strictEqual(Model.reportMark('ready', true, true, true), 'ready')
+  assert.strictEqual(Model.reportMark('error', true, true, true), 'failed')
+  assert.strictEqual(Model.reportMark('ready', true, false, true), '')
+  assert.strictEqual(Model.reportMark('error', true, false, true), '')
+})
+
+test('reportMark: empty when the setting is off', () => {
+  assert.strictEqual(Model.reportMark('running', true, false, false), '')
+  assert.strictEqual(Model.reportMark('ready', true, true, false), '')
+})
+
+test('reportMark: empty when the report is for other updates', () => {
+  assert.strictEqual(Model.reportMark('ready', false, true, true), '')
+  assert.strictEqual(Model.reportMark('running', false, false, true), '')
+})
+
+test('reportMark: empty without a report', () => {
+  assert.strictEqual(Model.reportMark('', true, true, true), '')
+  assert.strictEqual(Model.reportMark(undefined, true, true, true), '')
+})
+
+test('iconKey: the mark picks the report and error glyphs', () => {
+  assert.strictEqual(Model.iconKey(summary(), 'pending', {}, 'ready'), 'report')
+  assert.strictEqual(Model.iconKey(summary(), 'pending', {}, 'failed'), 'error')
+  assert.strictEqual(Model.iconKey(summary(), 'pending', {}, 'writing'), Model.iconKey(summary(), 'pending', {}))
+  assert.strictEqual(Model.iconKey(summary(), 'pending', {}, ''), Model.iconKey(summary(), 'pending', {}))
+})
+
+test('barVisible: a mark keeps the item on screen', () => {
+  assert.strictEqual(Model.barVisible('current', true, false, 'ready'), true)
+  assert.strictEqual(Model.barVisible('checking', true, false, 'writing'), true)
+  assert.strictEqual(Model.barVisible('current', true, false, ''), false)
+})
+
+test('tooltip: the mark wins over the update list', () => {
+  assert.strictEqual(Model.tooltip(summary(), 'pending', '', 'writing'), 'Writing the update report')
+  assert.strictEqual(Model.tooltip(summary(), 'pending', '', 'ready'), 'Update report ready')
+  assert.strictEqual(Model.tooltip(summary(), 'pending', '', 'failed'), 'The update report failed')
+  assert.strictEqual(Model.tooltip(summary(), 'pending', '', ''), Model.tooltip(summary(), 'pending', ''))
+})
+
+test('reportNotice: fixed text for both outcomes', () => {
+  assert.deepStrictEqual(Model.reportNotice(true), { title: 'Update report ready', body: 'Click to see what is new.' })
+  assert.deepStrictEqual(Model.reportNotice(false), { title: 'The update report failed', body: 'Click to see why.' })
+})

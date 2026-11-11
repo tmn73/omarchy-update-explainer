@@ -104,24 +104,52 @@ function barStatus(summary, status, show) {
   return status
 }
 
-// The key of the bar glyph. Checking and error win over the update type.
-function iconKey(summary, status, show) {
+// What the bar shows about the panel report: "writing" while it runs, "ready"
+// or "failed" once it ended and the user has not opened the popup since, else
+// "". `current` is false when the report is for other updates than the ones
+// pending now, and `enabled` is the user's setting.
+function reportMark(state, current, unread, enabled) {
+  if (!enabled || !current) return ""
+  if (state === "running") return "writing"
+  if (!unread) return ""
+  if (state === "ready") return "ready"
+  return state === "error" ? "failed" : ""
+}
+
+// The notification for a report that ended. Fixed text only: nothing from the
+// report goes into a command line.
+function reportNotice(ok) {
+  return ok
+    ? { title: "Update report ready", body: "Click to see what is new." }
+    : { title: "The update report failed", body: "Click to see why." }
+}
+
+// The key of the bar glyph. An unread report wins, then checking and error
+// win over the update type. A report being written keeps the glyph.
+function iconKey(summary, status, show, mark) {
+  if (mark === "ready") return "report"
+  if (mark === "failed") return "error"
   if (status !== "pending") return status
   return kindOf(summary, show) || "pending"
 }
 
 // The bar item shows for pending and error. While checking it shows only
 // before the first summary, so later refreshes stay silent. A retry after a
-// failed check keeps the item visible, so the error icon does not blink.
-function barVisible(status, hasSummary, failedBefore) {
+// failed check keeps the item visible, so the error icon does not blink. A
+// report mark always shows.
+function barVisible(status, hasSummary, failedBefore, mark) {
+  if (mark) return true
   if (status === "checking") return !hasSummary
   if (failedBefore) return true
   return status === "pending" || status === "error"
 }
 
 // `message` is the helper's text for the last run, never one kept from an
-// older good summary.
-function tooltip(summary, status, message) {
+// older good summary. A report mark wins over the update check.
+function tooltip(summary, status, message, mark) {
+  if (mark === "writing") return "Writing the update report"
+  if (mark === "ready") return "Update report ready"
+  if (mark === "failed") return "The update report failed"
   if (status === "checking") return "Checking for updates"
   if (status === "error") return message ? message : "The update check failed"
   if (status === "pending" && summary) {
@@ -473,6 +501,8 @@ if (typeof module !== "undefined") {
     kindOf: kindOf,
     barStatus: barStatus,
     iconKey: iconKey,
+    reportMark: reportMark,
+    reportNotice: reportNotice,
     tooltip: tooltip,
     barVisible: barVisible,
     verdict: verdict,
