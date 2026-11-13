@@ -770,3 +770,62 @@ test('reportSignals: no notification when the report is for other updates', () =
 test('reportSignals: no notification when the setting is off', () => {
   assert.deepStrictEqual(Model.reportSignals(false, true, false), { unread: true, notify: false })
 })
+
+function keyOf(items) {
+  return Model.updatesKey(summary({ items: items }))
+}
+
+test('reportDrift: the same updates cover the report with no drift', () => {
+  const k = keyOf({ pacman: [{ name: 'a', to: '2' }], mise: [{ name: 'uv', to: '1' }] })
+  const d = Model.reportDrift(k, k)
+  assert.strictEqual(d.covers, true)
+  assert.deepStrictEqual(d.installed, [])
+  assert.deepStrictEqual(d.added, [])
+})
+
+test('reportDrift: an update installed since the report keeps the report', () => {
+  const report = keyOf({ pacman: [{ name: 'a', to: '2' }], mise: [{ name: 'opencode', to: '2.3.0' }] })
+  const now = keyOf({ pacman: [{ name: 'a', to: '2' }], mise: [] })
+  const d = Model.reportDrift(report, now)
+  assert.strictEqual(d.covers, true)
+  assert.deepStrictEqual(d.installed, ['opencode'])
+  assert.deepStrictEqual(d.added, [])
+})
+
+test('reportDrift: a new update and a newer version are not in the report', () => {
+  const report = keyOf({ pacman: [{ name: 'a', to: '2' }, { name: 'b', to: '1' }] })
+  const now = keyOf({ pacman: [{ name: 'a', to: '2' }, { name: 'b', to: '1.1' }, { name: 'c', to: '5' }] })
+  const d = Model.reportDrift(report, now)
+  assert.strictEqual(d.covers, true)
+  assert.deepStrictEqual(d.installed, [])
+  assert.deepStrictEqual(d.added, ['b', 'c'])
+})
+
+test('reportDrift: a report with none of its updates still pending is stale', () => {
+  const report = keyOf({ pacman: [{ name: 'a', to: '2' }] })
+  assert.strictEqual(Model.reportDrift(report, keyOf({ pacman: [{ name: 'z', to: '1' }] })).covers, false)
+  assert.strictEqual(Model.reportDrift(report, '').covers, false)
+  assert.strictEqual(Model.reportDrift('', report).covers, false)
+})
+
+test('reportDrift: versions with a colon or an epoch keep the right name', () => {
+  const report = keyOf({ pacman: [{ name: 'lib32-mesa', to: '1:26.2.7-1' }, { name: 'x', to: '1' }] })
+  const now = keyOf({ pacman: [{ name: 'x', to: '1' }] })
+  assert.deepStrictEqual(Model.reportDrift(report, now).installed, ['lib32-mesa'])
+})
+
+test('driftNotice: empty when nothing changed', () => {
+  assert.strictEqual(Model.driftNotice({ covers: true, installed: [], added: [] }), null)
+  assert.strictEqual(Model.driftNotice(null), null)
+})
+
+test('driftNotice: names what was installed and what the report misses', () => {
+  const n = Model.driftNotice({ covers: true, installed: ['opencode'], added: ['c'] })
+  assert.strictEqual(n.title, 'The updates changed since this report')
+  assert.strictEqual(n.detail, 'Installed since: opencode. Not in this report: c.')
+})
+
+test('driftNotice: a long list shows three names and a count', () => {
+  const n = Model.driftNotice({ covers: true, installed: ['a', 'b', 'c', 'd', 'e'], added: [] })
+  assert.strictEqual(n.detail, 'Installed since: a, b, c and 2 more.')
+})

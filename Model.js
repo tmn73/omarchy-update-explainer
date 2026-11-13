@@ -482,7 +482,7 @@ function parseSavedReport(raw) {
 }
 
 // One string per set of pending updates. A report belongs to the set it was
-// written for, and the panel hides it once the set changes.
+// written for. reportDrift compares that set with the updates on screen.
 function updatesKey(summary) {
   if (!summary || !summary.items) return ""
   var parts = []
@@ -493,6 +493,61 @@ function updatesKey(summary) {
     })
   })
   return parts.sort().join("\n")
+}
+
+function keyEntries(key) {
+  return String(key || "").split("\n").filter(function (line) { return line !== "" })
+}
+
+// "pacman:lib32-mesa@1:26.2.7-1" gives "lib32-mesa". The source has no colon
+// and a package name has no "@", so the version may hold both.
+function keyName(entry) {
+  var rest = entry.slice(entry.indexOf(":") + 1)
+  var at = rest.indexOf("@")
+  return at < 0 ? rest : rest.slice(0, at)
+}
+
+function uniqueNames(entries) {
+  var seen = {}
+  var names = []
+  entries.forEach(function (entry) {
+    var name = keyName(entry)
+    if (!seen[name]) { seen[name] = true; names.push(name) }
+  })
+  return names
+}
+
+// Compares the updates a report was written for with the updates on screen.
+// `covers` is true while at least one update of the report still waits, so
+// the report stays useful. `installed` names the updates of the report that
+// no longer wait. `added` names the updates on screen that the report does
+// not explain: a new package, or a newer version than the report saw.
+function reportDrift(reportKey, currentKey) {
+  var before = keyEntries(reportKey)
+  var now = keyEntries(currentKey)
+  var inBefore = {}
+  var inNow = {}
+  var namesNow = {}
+  before.forEach(function (entry) { inBefore[entry] = true })
+  now.forEach(function (entry) { inNow[entry] = true; namesNow[keyName(entry)] = true })
+  var covers = before.some(function (entry) { return inNow[entry] })
+  var installed = uniqueNames(before.filter(function (entry) { return !inNow[entry] && !namesNow[keyName(entry)] }))
+  var added = uniqueNames(now.filter(function (entry) { return !inBefore[entry] }))
+  return { covers: covers, installed: installed, added: added }
+}
+
+function nameList(names) {
+  if (names.length <= 3) return names.join(", ")
+  return names.slice(0, 3).join(", ") + " and " + (names.length - 3) + " more"
+}
+
+// The notice above a report whose updates changed, or null when none did.
+function driftNotice(drift) {
+  if (!drift || (drift.installed.length === 0 && drift.added.length === 0)) return null
+  var parts = []
+  if (drift.installed.length > 0) parts.push("Installed since: " + nameList(drift.installed) + ".")
+  if (drift.added.length > 0) parts.push("Not in this report: " + nameList(drift.added) + ".")
+  return { title: "The updates changed since this report", detail: parts.join(" ") }
 }
 
 // What the primary button does in the panel: "terminal" (the Markdown report
@@ -538,6 +593,8 @@ if (typeof module !== "undefined") {
     savedReportText: savedReportText,
     parseSavedReport: parseSavedReport,
     updatesKey: updatesKey,
+    reportDrift: reportDrift,
+    driftNotice: driftNotice,
     reportMode: reportMode,
     languageOf: languageOf,
     AGENT_DEADLINE_MS: AGENT_DEADLINE_MS,

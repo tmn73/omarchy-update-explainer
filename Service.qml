@@ -56,7 +56,8 @@ Item {
 
   // The report in the panel. whatsNewState is "", "running", "ready" or
   // "error". The report belongs to the updates it was written for
-  // (whatsNewKey), so it stops showing when they change.
+  // (whatsNewKey). It keeps showing while one of them still waits, with a
+  // notice that names what changed (Model.reportDrift).
   readonly property bool reportInTerminal: boolSetting("reportInTerminal", false)
   // The two signals of a panel report: the mark on the bar icon and the
   // notification when it ends.
@@ -82,7 +83,10 @@ Item {
   // section is added (finishNotes).
   property string appendWaiting: ""
   property real reportStartedAt: 0
-  readonly property bool whatsNewCurrent: whatsNewKey !== "" && whatsNewKey === Model.updatesKey(shown)
+  readonly property var reportDrift: Model.reportDrift(whatsNewKey, Model.updatesKey(shown))
+  readonly property bool whatsNewCurrent: reportDrift.covers
+  // The notice above a report whose updates changed, or null.
+  readonly property var reportDriftNotice: whatsNewState === "ready" ? Model.driftNotice(reportDrift) : null
   readonly property bool canAsk: sessionId !== "" && Headless.supports(agent)
   readonly property bool hasReport: whatsNewCurrent && whatsNewState !== ""
   readonly property string reportMark: Model.reportMark(whatsNewState, whatsNewCurrent, reportUnread, reportOnIcon)
@@ -323,7 +327,7 @@ Item {
   Component.onCompleted: loadSavedReport()
 
   // Shows the saved report after a shell reload. A report started since the
-  // reload wins. whatsNewCurrent still hides it when the updates changed.
+  // reload wins. whatsNewCurrent still hides it when none of its updates wait.
   function restoreReport(text) {
     if (whatsNewState !== "") return
     var saved = Model.parseSavedReport(text)

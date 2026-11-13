@@ -165,6 +165,7 @@ Panel {
           hasReport: updates.hasReport
           reportStep: updates.reportStep
           reportStartedAt: updates.reportStartedAt
+          reportDrift: updates.reportDriftNotice
           onPluginsRequested: updates.updatePlugins()
         }
       }

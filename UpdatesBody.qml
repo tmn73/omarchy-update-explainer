@@ -22,6 +22,8 @@ Column {
   property bool hasReport: false
   property string reportStep: ""
   property real reportStartedAt: 0
+  // { title, detail } when the updates changed since the report, else null.
+  property var reportDrift: null
   property string tab: "whatsnew"
 
   readonly property bool hasSummary: summary !== null
@@ -72,6 +74,7 @@ Column {
     error: root.reportError
     step: root.reportStep
     startedAt: root.reportStartedAt
+    drift: root.reportDrift
     fontFamily: root.fontFamily
   }
 

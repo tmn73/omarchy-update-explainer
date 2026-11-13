@@ -6,6 +6,7 @@ import qs.Commons
 // headline and one line for each new feature. Open a row for the detail. The
 // smaller changes, the list of all changes and the things to do come last,
 // folded. While the agent works, or when it failed, one VerdictBlock says so.
+// When the updates changed since the report, a notice on top names them.
 // The data comes from Model.parseWhatsNew.
 Column {
   id: root
@@ -16,6 +17,8 @@ Column {
   property string error: ""
   property string step: ""
   property real startedAt: 0
+  // { title, detail } from Model.driftNotice, or null.
+  property var drift: null
   property string fontFamily: Style.font.family
 
   readonly property bool ready: phase === "ready" && report !== null
@@ -35,6 +38,15 @@ Column {
     visible: root.phase === "error"
     tone: "error"
     title: root.error
+    fontFamily: root.fontFamily
+  }
+
+  VerdictBlock {
+    width: parent.width
+    visible: root.ready && root.drift !== null
+    tone: "error"
+    title: root.drift ? root.drift.title : ""
+    detail: root.drift ? root.drift.detail : ""
     fontFamily: root.fontFamily
   }
 
