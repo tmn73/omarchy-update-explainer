@@ -599,6 +599,21 @@ test('a saved report reads back with its key and session', () => {
   assert.deepStrictEqual(r.report, Model.parseWhatsNew(answer()))
 })
 
+test('a saved report replaces the one on screen only when another screen wrote a newer one', () => {
+  const saved = Model.parseSavedReport(Model.savedReportText('k2', 's2', answer()))
+  // Nothing on this screen yet: the shell reload case.
+  assert.strictEqual(Model.adoptsSavedReport('', 'k1', 's1', saved), true)
+  // Another screen wrote a report for other updates, or in another session.
+  assert.strictEqual(Model.adoptsSavedReport('ready', 'k1', 's1', saved), true)
+  assert.strictEqual(Model.adoptsSavedReport('ready', 'k2', 's1', saved), true)
+  assert.strictEqual(Model.adoptsSavedReport('error', 'k1', 's1', saved), true)
+  // The same report this screen already shows.
+  assert.strictEqual(Model.adoptsSavedReport('ready', 'k2', 's2', saved), false)
+  // A report that this screen is writing wins.
+  assert.strictEqual(Model.adoptsSavedReport('running', 'k1', 's1', saved), false)
+  assert.strictEqual(Model.adoptsSavedReport('', '', '', null), false)
+})
+
 test('parseSavedReport returns null for a missing, cut or keyless file', () => {
   assert.strictEqual(Model.parseSavedReport(''), null)
   assert.strictEqual(Model.parseSavedReport('[]'), null)

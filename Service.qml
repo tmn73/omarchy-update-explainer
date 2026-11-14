@@ -68,7 +68,12 @@ Item {
   // True from the end of a report until the user opens the popup. A report
   // restored after a shell reload never sets it.
   property bool reportUnread: false
-  onPanelOpenChanged: if (panelOpen) reportUnread = false
+  onPanelOpenChanged: {
+    if (panelOpen) {
+      reportUnread = false
+      loadSavedReport()
+    }
+  }
   property var whatsNew: null
   property string whatsNewState: ""
   property string whatsNewError: ""
@@ -326,12 +331,12 @@ Item {
 
   Component.onCompleted: loadSavedReport()
 
-  // Shows the saved report after a shell reload. A report started since the
-  // reload wins. whatsNewCurrent still hides it when none of its updates wait.
+  // Shows the saved report after a shell reload, and when the popup opens on a
+  // screen whose bar did not write the latest report (Model.adoptsSavedReport).
+  // whatsNewCurrent still hides it when none of its updates wait.
   function restoreReport(text) {
-    if (whatsNewState !== "") return
     var saved = Model.parseSavedReport(text)
-    if (!saved) return
+    if (!Model.adoptsSavedReport(whatsNewState, whatsNewKey, sessionId, saved)) return
     whatsNewKey = saved.key
     whatsNew = saved.report
     sessionId = saved.sessionId

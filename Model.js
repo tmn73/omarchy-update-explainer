@@ -481,6 +481,17 @@ function parseSavedReport(raw) {
   return { key: data.key, sessionId: sessionId, report: report }
 }
 
+// Each screen has its own bar, so each screen holds its own report. A screen
+// takes the saved report when it shows none, or when another screen saved a
+// report for other updates or from another session. A report that this screen
+// is writing wins.
+function adoptsSavedReport(state, key, sessionId, saved) {
+  if (!saved) return false
+  if (state === "running") return false
+  if (state === "") return true
+  return saved.key !== key || saved.sessionId !== sessionId
+}
+
 // One string per set of pending updates. A report belongs to the set it was
 // written for. reportDrift compares that set with the updates on screen.
 function updatesKey(summary) {
@@ -592,6 +603,7 @@ if (typeof module !== "undefined") {
     parseWhatsNew: parseWhatsNew,
     savedReportText: savedReportText,
     parseSavedReport: parseSavedReport,
+    adoptsSavedReport: adoptsSavedReport,
     updatesKey: updatesKey,
     reportDrift: reportDrift,
     driftNotice: driftNotice,
