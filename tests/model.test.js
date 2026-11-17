@@ -823,6 +823,15 @@ test('reportDrift: a report with none of its updates still pending is stale', ()
   assert.strictEqual(Model.reportDrift('', report).covers, false)
 })
 
+test('reportDrift: a report that is mostly installed is stale', () => {
+  const many = []
+  for (let i = 0; i < 10; i++) many.push({ name: 'p' + i, to: '1' })
+  const report = keyOf({ pacman: many })
+  assert.strictEqual(Model.reportDrift(report, keyOf({ pacman: many.slice(0, 5) })).covers, true)
+  assert.strictEqual(Model.reportDrift(report, keyOf({ pacman: many.slice(0, 4) })).covers, false)
+  assert.strictEqual(Model.reportDrift(report, keyOf({ pacman: many.slice(0, 1) })).covers, false)
+})
+
 test('reportDrift: versions with a colon or an epoch keep the right name', () => {
   const report = keyOf({ pacman: [{ name: 'lib32-mesa', to: '1:26.2.7-1' }, { name: 'x', to: '1' }] })
   const now = keyOf({ pacman: [{ name: 'x', to: '1' }] })

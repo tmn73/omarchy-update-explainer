@@ -529,8 +529,9 @@ function uniqueNames(entries) {
 }
 
 // Compares the updates a report was written for with the updates on screen.
-// `covers` is true while at least one update of the report still waits, so
-// the report stays useful. `installed` names the updates of the report that
+// `covers` is true while at least half of the updates of the report still
+// wait, so the report stays useful. Below that it describes mostly installed
+// updates and is stale. `installed` names the updates of the report that
 // no longer wait. `added` names the updates on screen that the report does
 // not explain: a new package, or a newer version than the report saw.
 function reportDrift(reportKey, currentKey) {
@@ -541,7 +542,8 @@ function reportDrift(reportKey, currentKey) {
   var namesNow = {}
   before.forEach(function (entry) { inBefore[entry] = true })
   now.forEach(function (entry) { inNow[entry] = true; namesNow[keyName(entry)] = true })
-  var covers = before.some(function (entry) { return inNow[entry] })
+  var waiting = before.filter(function (entry) { return inNow[entry] }).length
+  var covers = waiting > 0 && waiting * 2 >= before.length
   var installed = uniqueNames(before.filter(function (entry) { return !inNow[entry] && !namesNow[keyName(entry)] }))
   var added = uniqueNames(now.filter(function (entry) { return !inBefore[entry] }))
   return { covers: covers, installed: installed, added: added }
