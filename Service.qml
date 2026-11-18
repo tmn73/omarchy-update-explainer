@@ -397,15 +397,14 @@ Item {
   }
 
   function updateNow() {
-    if (updateProcess.running) return
-    updateProcess.command = ["omarchy-launch-floating-terminal-with-presentation", "omarchy-update"]
-    updateProcess.running = true
+    // Detached on purpose: a terminal that is a child of the shell dies with
+    // it, and the update restarts the shell before it finishes. The panel
+    // refreshes on its next timer tick.
+    Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", "omarchy-update"])
   }
 
   function updatePlugins() {
-    if (pluginUpdateProcess.running) return
-    pluginUpdateProcess.command = ["omarchy-launch-floating-terminal-with-presentation", "omarchy plugin update"]
-    pluginUpdateProcess.running = true
+    Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", "omarchy plugin update"])
   }
 
   onCheckPluginsChanged: if (!checkPlugins) pluginList = []
@@ -663,16 +662,6 @@ Item {
   }
 
   Process {
-    id: pluginUpdateProcess
-
-    running: false
-    command: []
-    onExited: function (exitCode) {
-      root.refresh(true)
-    }
-  }
-
-  Process {
     id: agentProcess
 
     running: false
@@ -716,18 +705,6 @@ Item {
       id: reportCollector
 
       waitForEnd: true
-    }
-  }
-
-  // If the launcher returns at once instead of waiting for the update, the
-  // next timer tick refreshes.
-  Process {
-    id: updateProcess
-
-    running: false
-    command: []
-    onExited: function (exitCode) {
-      root.refresh()
     }
   }
 }
